@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mis Solicitudes — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Mis Solicitudes</h2>
+      <a href="nueva-solicitud.html" class="btn btn-primary btn-sm">➕ Nueva</a>
+    </header>
+    <main class="page-body">
+      <!-- Filtros rápidos -->
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm active-filter" data-status="" onclick="filter('')">Todas</button>
+        <button class="btn btn-outline btn-sm" data-status="EN_REVISION" onclick="filter('EN_REVISION')">En Revisión</button>
+        <button class="btn btn-outline btn-sm" data-status="APROBADO" onclick="filter('APROBADO')">Aprobadas</button>
+        <button class="btn btn-outline btn-sm" data-status="RECHAZADO" onclick="filter('RECHAZADO')">Rechazadas</button>
+        <button class="btn btn-outline btn-sm" data-status="PAGADO" onclick="filter('PAGADO')">Pagadas</button>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Folio</th><th>Tipo</th><th>Proyecto</th><th>Concepto</th>
+              <th>Monto MXN</th><th>Estado</th><th>Alertas</th><th>Fecha</th><th></th>
+            </tr></thead>
+            <tbody id="table-body">
+              <tr><td colspan="9" style="text-align:center;padding:24px;color:#6b7280;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+let allRows = [];
+
+(async () => {
+  const user = UI.guard();
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  try {
+    const { data } = await API.requests.list({ limit: 200 });
+    allRows = data;
+    render(allRows);
+  } catch (err) {
+    document.getElementById('table-body').innerHTML =
+      `<tr><td colspan="9" style="color:#dc2626;padding:16px;">${err.error || 'Error'}</td></tr>`;
+  }
+})();
+
+function filter(status) {
+  document.querySelectorAll('[data-status]').forEach(b => b.classList.remove('active-filter'));
+  document.querySelector(`[data-status="${status}"]`)?.classList.add('active-filter');
+  render(status ? allRows.filter(r => r.status === status) : allRows);
+}
+
+function render(rows) {
+  const tbody = document.getElementById('table-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:#6b7280;">Sin solicitudes</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td class="font-mono">${r.folio}</td>
+      <td>${r.type}</td>
+      <td>${r.project_name}</td>
+      <td>${r.concept_name}</td>
+      <td>${UI.money(r.amount_mxn)}</td>
+      <td>${UI.statusBadge(r.status)}</td>
+      <td>${UI.alertFlags(r)}</td>
+      <td class="text-muted text-sm">${UI.fmt(r.created_at)}</td>
+      <td>
+        <a href="solicitud-detalle.html?id=${r.id}" class="btn btn-outline btn-xs">Ver</a>
+        ${r.status === 'RECHAZADO' && !r.definitive_rejection
+          ? `<a href="solicitud-detalle.html?id=${r.id}" class="btn btn-warning btn-xs">Corregir</a>` : ''}
+      </td>
+    </tr>`).join('');
+}
+</script>
+<style>.active-filter { background: #1a56db; color: #fff; border-color: #1a56db; }</style>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detalle Solicitud — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2 id="page-title">Solicitud</h2>
+      <div id="action-buttons" class="flex gap-2"></div>
+    </header>
+    <main class="page-body">
+      <div id="content">
+        <p class="text-muted">Cargando...</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Modal Aprobar -->
+<div class="modal-overlay" id="modal-approve">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Aprobar Solicitud</h3>
+      <button class="modal-close" onclick="closeModal('modal-approve')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Comentario (opcional)</label>
+        <textarea id="approve-comment" class="form-control" rows="3" placeholder="Observaciones de aprobación..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-approve')">Cancelar</button>
+      <button class="btn btn-success" id="btn-confirm-approve">✅ Confirmar Aprobación</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Rechazar -->
+<div class="modal-overlay" id="modal-reject">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Rechazar Solicitud</h3>
+      <button class="modal-close" onclick="closeModal('modal-reject')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Motivo de rechazo * (mínimo 10 caracteres)</label>
+        <textarea id="reject-reason" class="form-control" rows="3"
+                  placeholder="Describe el motivo del rechazo..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="reject-definitive">
+          Rechazo definitivo (el solicitante NO podrá reenviar)
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-reject')">Cancelar</button>
+      <button class="btn btn-danger" id="btn-confirm-reject">❌ Confirmar Rechazo</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+const id = new URLSearchParams(location.search).get('id');
+let currentRequest = null;
+
+(async () => {
+  const user = UI.guard();
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  if (!id) { document.getElementById('content').innerHTML = '<p class="text-muted">ID no especificado</p>'; return; }
+
+  try {
+    const { data } = await API.requests.get(id);
+    currentRequest = data;
+    renderDetail(data, user);
+    renderActions(data, user);
+  } catch (err) {
+    document.getElementById('content').innerHTML = `<p style="color:red">${err.error || 'Error cargando solicitud'}</p>`;
+  }
+})();
+
+function renderDetail(r, user) {
+  document.getElementById('page-title').textContent = `Solicitud ${r.folio}`;
+
+  const ocr = r.ocr_is_legible ? `
+    <div class="form-row" style="margin-top:8px;">
+      <div><span class="text-muted text-sm">RFC Emisor</span><div class="font-mono">${r.ocr_rfc_emisor || '—'}</div></div>
+      <div><span class="text-muted text-sm">UUID CFDI</span><div class="font-mono" style="font-size:11px;">${r.ocr_uuid_cfdi || '—'}</div></div>
+    </div>
+    <div class="form-row" style="margin-top:8px;">
+      <div><span class="text-muted text-sm">Subtotal</span><div>${UI.money(r.ocr_subtotal)}</div></div>
+      <div><span class="text-muted text-sm">IVA (16%)</span><div>${UI.money(r.ocr_iva)}</div></div>
+      <div><span class="text-muted text-sm">Total CFDI</span><div>${UI.money(r.ocr_total)}</div></div>
+    </div>` : r.sin_factura ? '<div class="alert alert-warning">Sin comprobante fiscal</div>' :
+    '<div class="alert alert-danger">Comprobante no legible</div>';
+
+  const valLog = (r.validation_log || []).map(v => `
+    <li>
+      <div class="tl-label">${UI.fmt(v.created_at, true)} — <strong>${v.step}</strong></div>
+      <div class="tl-text">
+        <span class="badge-status badge-${v.status === 'PASS' ? 'APROBADO' : v.status === 'FAIL' ? 'RECHAZADO' : 'EN_REVISION'}">${v.status}</span>
+        ${v.detail || ''}
+      </div>
+    </li>`).join('');
+
+  const aprLog = (r.approval_history || []).map(a => `
+    <li>
+      <div class="tl-label">${UI.fmt(a.created_at, true)} — <strong>${a.user_name}</strong> (${a.user_role})</div>
+      <div class="tl-text">${a.action}${a.comment ? ': ' + a.comment : ''}</div>
+    </li>`).join('');
+
+  document.getElementById('content').innerHTML = `
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;">
+      <div>
+        <!-- Info principal -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <span class="card-title">Información General</span>
+            ${UI.statusBadge(r.status)}
+          </div>
+          <div class="form-row">
+            <div><span class="text-muted text-sm">Tipo</span><div>${r.type} ${r.sin_factura ? '<span class="badge-status badge-sin-factura">SIN FACT.</span>' : ''}</div></div>
+            <div><span class="text-muted text-sm">Proyecto</span><div>${r.project_name} (${r.project_code})</div></div>
+          </div>
+          <div class="form-row" style="margin-top:12px;">
+            <div><span class="text-muted text-sm">Categoría</span><div>${r.category_name}</div></div>
+            <div><span class="text-muted text-sm">Concepto</span><div>${r.concept_name}</div></div>
+          </div>
+          <div class="form-row" style="margin-top:12px;">
+            <div><span class="text-muted text-sm">Monto</span><div style="font-size:20px;font-weight:700;">${UI.money(r.amount_mxn)}</div></div>
+            <div><span class="text-muted text-sm">Solicitante</span><div>${r.requester_name}</div></div>
+          </div>
+          ${r.observations ? `<div style="margin-top:12px;"><span class="text-muted text-sm">Observaciones</span><div>${r.observations}</div></div>` : ''}
+          ${r.rejected_reason ? `<div class="alert alert-danger" style="margin-top:12px;">Razón de rechazo: ${r.rejected_reason}${r.definitive_rejection ? ' (DEFINITIVO)' : ''}</div>` : ''}
+          <div style="margin-top:12px;">
+            ${UI.alertFlags(r)}
+          </div>
+        </div>
+
+        <!-- OCR -->
+        <div class="card mb-4">
+          <div class="card-header"><span class="card-title">Datos del Comprobante (OCR)</span>
+            ${r.ocr_confidence ? `<span class="badge-status badge-APROBADO">${r.ocr_confidence}% confianza</span>` : ''}
+          </div>
+          ${ocr}
+          ${r.comprobante_path ? `<div class="mt-2"><a href="/${r.comprobante_path}" target="_blank" class="btn btn-outline btn-sm">📎 Ver comprobante</a></div>` : ''}
+        </div>
+
+        <!-- Historial -->
+        ${aprLog ? `<div class="card">
+          <div class="card-header"><span class="card-title">Historial de Aprobaciones</span></div>
+          <ul class="timeline">${aprLog}</ul>
+        </div>` : ''}
+      </div>
+
+      <div>
+        <!-- Validación automática -->
+        <div class="card mb-4">
+          <div class="card-header"><span class="card-title">Validación Automática</span></div>
+          ${valLog ? `<ul class="timeline">${valLog}</ul>` : '<p class="text-muted text-sm">Sin resultados de validación</p>'}
+        </div>
+
+        <!-- Meta -->
+        <div class="card">
+          <div class="card-header"><span class="card-title">Detalles</span></div>
+          <div class="text-sm" style="line-height:2;">
+            <div><span class="text-muted">Período:</span> ${r.period_year}-${String(r.period_month).padStart(2,'0')}</div>
+            <div><span class="text-muted">Moneda:</span> ${r.currency} (T.C. ${r.exchange_rate})</div>
+            <div><span class="text-muted">Validador:</span> ${r.validator_name || '—'}</div>
+            <div><span class="text-muted">Creada:</span> ${UI.fmt(r.created_at, true)}</div>
+            ${r.payment_date ? `<div><span class="text-muted">Pagada:</span> ${UI.fmt(r.payment_date, true)}</div>` : ''}
+            ${r.payment_method ? `<div><span class="text-muted">Método pago:</span> ${r.payment_method}</div>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderActions(r, user) {
+  const btns = [];
+
+  if (user.role === 'validator' || user.role === 'superadmin') {
+    if (r.status === 'EN_REVISION') {
+      btns.push(`<button class="btn btn-success btn-sm" onclick="openModal('modal-approve')">✅ Aprobar</button>`);
+      btns.push(`<button class="btn btn-danger btn-sm"  onclick="openModal('modal-reject')">❌ Rechazar</button>`);
+    }
+  }
+
+  if ((user.role === 'operative' || user.role === 'superadmin') && r.status === 'RECHAZADO' && !r.definitive_rejection) {
+    btns.push(`<a href="resubmit.html?id=${r.id}" class="btn btn-warning btn-sm">🔄 Reenviar</a>`);
+  }
+
+  document.getElementById('action-buttons').innerHTML = btns.join('');
+
+  document.getElementById('btn-confirm-approve').onclick = async () => {
+    const btn = document.getElementById('btn-confirm-approve');
+    UI.loading(btn, true);
+    try {
+      await API.approval.approve(r.id, document.getElementById('approve-comment').value);
+      UI.toast('Solicitud aprobada', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } catch (err) { UI.toast(err.error || 'Error', 'error'); UI.loading(btn, false); }
+  };
+
+  document.getElementById('btn-confirm-reject').onclick = async () => {
+    const reason = document.getElementById('reject-reason').value.trim();
+    if (reason.length < 10) { UI.toast('El motivo debe tener al menos 10 caracteres', 'error'); return; }
+    const btn = document.getElementById('btn-confirm-reject');
+    UI.loading(btn, true);
+    try {
+      await API.approval.reject(r.id, reason, document.getElementById('reject-definitive').checked);
+      UI.toast('Solicitud rechazada', 'error');
+      setTimeout(() => location.reload(), 1000);
+    } catch (err) { UI.toast(err.error || 'Error', 'error'); UI.loading(btn, false); }
+  };
+}
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+</script>
+</body>
+</html>

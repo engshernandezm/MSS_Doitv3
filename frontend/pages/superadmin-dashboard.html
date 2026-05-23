@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Superadmin Dashboard — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Dashboard General</h2>
+      <a href="reportes.html" class="btn btn-outline btn-sm">📊 Reportes</a>
+    </header>
+    <main class="page-body">
+      <div class="stats-grid" id="stats"></div>
+
+      <!-- Semáforo presupuestal -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title">Semáforo Presupuestal</span>
+          <div class="flex gap-2">
+            <select id="budget-year" class="form-control" style="width:100px;"></select>
+            <select id="budget-month" class="form-control" style="width:120px;"></select>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Proyecto</th><th>Categoría</th><th>Presupuesto</th>
+              <th>Consumido</th><th>%</th><th>Semáforo</th>
+            </tr></thead>
+            <tbody id="budget-body">
+              <tr><td colspan="6" class="text-muted text-sm" style="padding:16px;text-align:center;">Selecciona año y mes</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Solicitudes recientes (todas) -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Actividad Reciente</span>
+          <a href="solicitudes-admin.html" class="btn btn-outline btn-sm">Ver todas</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Folio</th><th>Solicitante</th><th>Proyecto</th>
+              <th>Monto MXN</th><th>Estado</th><th>Alertas</th><th>Fecha</th><th></th>
+            </tr></thead>
+            <tbody id="requests-body">
+              <tr><td colspan="8" class="text-muted text-sm" style="padding:16px;text-align:center;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+(async () => {
+  const user = UI.guard(['superadmin']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  // Poblar año/mes
+  const now = new Date();
+  const yearSel = document.getElementById('budget-year');
+  const monthSel = document.getElementById('budget-month');
+  for (let y = now.getFullYear(); y >= now.getFullYear() - 2; y--) {
+    yearSel.innerHTML += `<option value="${y}" ${y===now.getFullYear()?'selected':''}>${y}</option>`;
+  }
+  const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  months.forEach((m, i) => {
+    monthSel.innerHTML += `<option value="${i+1}" ${i+1===now.getMonth()+1?'selected':''}>${m}</option>`;
+  });
+
+  const loadBudgets = async () => {
+    const year = yearSel.value, month = monthSel.value;
+    try {
+      const { data } = await API.analytics.budgets({ year, month });
+      const tbody = document.getElementById('budget-body');
+      if (!data.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:16px;color:#6b7280;">Sin presupuestos configurados para este período</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.map(b => `
+        <tr>
+          <td>${b.project_name}</td>
+          <td>${b.category_name}</td>
+          <td>${UI.money(b.budget_amount)}</td>
+          <td>${UI.money(b.consumed_amount)}</td>
+          <td style="font-weight:700;color:${b.semaforo==='rojo'?'#dc2626':b.semaforo==='amarillo'?'#d97706':'#059669'}">
+            ${(b.pct_consumed||0).toFixed(1)}%
+          </td>
+          <td>${UI.semaforo(b.semaforo)}</td>
+        </tr>`).join('');
+    } catch { }
+  };
+
+  yearSel.addEventListener('change', loadBudgets);
+  monthSel.addEventListener('change', loadBudgets);
+
+  // Stats + requests en paralelo
+  try {
+    const [statsRes, reqRes] = await Promise.all([
+      API.analytics.dashboard(),
+      API.requests.list({ limit: 15 }),
+    ]);
+
+    const s = statsRes.data;
+    document.getElementById('stats').innerHTML = `
+      <div class="stat-card warning">
+        <div class="stat-value">${s.pending_approval}</div>
+        <div class="stat-label">En Revisión</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-value">${s.approved}</div>
+        <div class="stat-label">Aprobadas</div>
+      </div>
+      <div class="stat-card primary">
+        <div class="stat-value">${s.paid}</div>
+        <div class="stat-label">Pagadas</div>
+      </div>
+      <div class="stat-card danger">
+        <div class="stat-value">${s.duplicates}</div>
+        <div class="stat-label">Posibles Dup.</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${UI.money(s.total_mxn)}</div>
+        <div class="stat-label">Total MXN</div>
+      </div>`;
+
+    const tbody = document.getElementById('requests-body');
+    const rows = reqRes.data;
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td class="font-mono">${r.folio}</td>
+        <td>${r.requester_name}</td>
+        <td>${r.project_name}</td>
+        <td>${UI.money(r.amount_mxn)}</td>
+        <td>${UI.statusBadge(r.status)}</td>
+        <td>${UI.alertFlags(r)}</td>
+        <td class="text-muted text-sm">${UI.fmt(r.created_at)}</td>
+        <td><a href="solicitud-detalle.html?id=${r.id}" class="btn btn-outline btn-xs">Ver</a></td>
+      </tr>`).join('');
+
+  } catch (err) {
+    document.getElementById('stats').innerHTML = `<p style="color:red">${err.error || 'Error'}</p>`;
+  }
+
+  loadBudgets();
+})();
+</script>
+</body>
+</html>

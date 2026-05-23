@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reportes — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Reportes de Gastos</h2>
+    </header>
+    <main class="page-body">
+      <!-- Filtros -->
+      <div class="card mb-4">
+        <div class="card-header"><span class="card-title">Filtros</span></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;">
+          <div class="form-group">
+            <label>Proyecto</label>
+            <select id="f-project" class="form-control"></select>
+          </div>
+          <div class="form-group">
+            <label>Tipo</label>
+            <select id="f-type" class="form-control">
+              <option value="">Todos</option>
+              <option value="REEMBOLSO">Reembolso</option>
+              <option value="REQUISICION">Requisición</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Estado</label>
+            <select id="f-status" class="form-control">
+              <option value="">Todos</option>
+              <option value="APROBADO">Aprobado</option>
+              <option value="RECHAZADO">Rechazado</option>
+              <option value="PAGADO">Pagado</option>
+              <option value="EN_REVISION">En Revisión</option>
+              <option value="CERRADO">Cerrado</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Desde</label>
+            <input type="date" id="f-from" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Hasta</label>
+            <input type="date" id="f-to" class="form-control">
+          </div>
+        </div>
+        <div class="flex gap-2" style="margin-top:8px;">
+          <button class="btn btn-primary" onclick="loadReport()">🔍 Buscar</button>
+          <button class="btn btn-success" onclick="downloadExcel()">📥 Exportar Excel (Compac)</button>
+        </div>
+      </div>
+
+      <!-- Resumen -->
+      <div class="stats-grid" id="summary" style="margin-bottom:16px;"></div>
+
+      <!-- Tabla -->
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Folio</th><th>Tipo</th><th>Solicitante</th><th>Proyecto</th>
+              <th>Concepto</th><th>Monto MXN</th><th>IVA</th><th>RFC Emisor</th>
+              <th>Estado</th><th>Período</th><th>Fecha</th>
+            </tr></thead>
+            <tbody id="report-body">
+              <tr><td colspan="11" style="text-align:center;padding:32px;color:#6b7280;">Aplica filtros y haz clic en Buscar</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+(async () => {
+  const user = UI.guard(['superadmin','administrativo','validator']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  const { data: projects } = await API.admin.projects();
+  UI.populateSelect(document.getElementById('f-project'), projects, 'id', 'name', 'Todos los proyectos');
+})();
+
+async function loadReport() {
+  const params = {
+    project_id: document.getElementById('f-project').value || undefined,
+    type:       document.getElementById('f-type').value   || undefined,
+    status:     document.getElementById('f-status').value || undefined,
+    date_from:  document.getElementById('f-from').value   || undefined,
+    date_to:    document.getElementById('f-to').value     || undefined,
+    limit:      500,
+  };
+  // Limpiar undefined
+  Object.keys(params).forEach(k => params[k] === undefined && delete params[k]);
+
+  try {
+    const { data } = await API.analytics.report(params);
+
+    // Resumen
+    const total = data.reduce((s, r) => s + (r.amount_mxn || 0), 0);
+    const totalIva = data.reduce((s, r) => s + (r.ocr_iva || 0), 0);
+    document.getElementById('summary').innerHTML = `
+      <div class="stat-card primary"><div class="stat-value">${data.length}</div><div class="stat-label">Registros</div></div>
+      <div class="stat-card"><div class="stat-value">${UI.money(total)}</div><div class="stat-label">Total MXN</div></div>
+      <div class="stat-card"><div class="stat-value">${UI.money(totalIva)}</div><div class="stat-label">Total IVA</div></div>`;
+
+    const tbody = document.getElementById('report-body');
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:32px;color:#6b7280;">Sin resultados</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.map(r => `
+      <tr>
+        <td class="font-mono">${r.folio}</td>
+        <td>${r.type} ${r.sin_factura ? '<span class="badge-status badge-sin-factura">S/F</span>' : ''}</td>
+        <td>${r.requester_name}</td>
+        <td>${r.project_name}</td>
+        <td>${r.concept_name}</td>
+        <td style="text-align:right;font-weight:600;">${UI.money(r.amount_mxn)}</td>
+        <td style="text-align:right;">${UI.money(r.ocr_iva)}</td>
+        <td class="font-mono text-sm">${r.ocr_rfc_emisor || '—'}</td>
+        <td>${UI.statusBadge(r.status)}</td>
+        <td class="text-muted text-sm">${r.period_year}-${String(r.period_month).padStart(2,'0')}</td>
+        <td class="text-muted text-sm">${UI.fmt(r.created_at)}</td>
+      </tr>`).join('');
+  } catch (err) {
+    document.getElementById('report-body').innerHTML =
+      `<tr><td colspan="11" style="color:#dc2626;padding:16px;">${err.error || 'Error'}</td></tr>`;
+  }
+}
+
+function downloadExcel() {
+  const params = {
+    project_id: document.getElementById('f-project').value || '',
+    type:       document.getElementById('f-type').value   || '',
+    status:     document.getElementById('f-status').value || '',
+    date_from:  document.getElementById('f-from').value   || '',
+    date_to:    document.getElementById('f-to').value     || '',
+  };
+  const url = API.analytics.excelUrl(params);
+  window.open(url, '_blank');
+}
+</script>
+</body>
+</html>

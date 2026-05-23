@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Admin — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Dashboard — Administrativo</h2>
+      <a href="reportes.html" class="btn btn-outline btn-sm">📊 Exportar Excel</a>
+    </header>
+    <main class="page-body">
+      <div class="stats-grid" id="stats"></div>
+
+      <!-- Reembolsos pendientes de pago -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title">Reembolsos Aprobados — Pendientes de Pago</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Folio</th><th>Solicitante</th><th>Proyecto</th><th>Monto MXN</th><th>Fecha Aprob.</th><th></th>
+            </tr></thead>
+            <tbody id="reembolsos-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Utilidad por proyecto -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Utilidad por Proyecto — Año actual</span>
+          <a href="presupuestos.html" class="btn btn-outline btn-sm">Gestionar ingresos</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Proyecto</th><th>Mes</th><th>Ingresos</th><th>Gastos</th><th>Utilidad</th><th>Margen</th>
+            </tr></thead>
+            <tbody id="utility-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Modal pagar reembolso -->
+<div class="modal-overlay" id="modal-pay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Ejecutar Reembolso</h3>
+      <button class="modal-close" onclick="closeModal('modal-pay')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="pay-folio" style="font-weight:600;margin-bottom:16px;"></p>
+      <div class="form-group">
+        <label>Método de pago *</label>
+        <select id="pay-method" class="form-control">
+          <option value="transferencia">Transferencia</option>
+          <option value="efectivo">Efectivo</option>
+          <option value="cheque">Cheque</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Referencia</label>
+        <input type="text" id="pay-ref" class="form-control">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-pay')">Cancelar</button>
+      <button class="btn btn-success" id="btn-confirm-pay">💵 Confirmar Reembolso</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+let selectedId = null;
+
+(async () => {
+  const user = UI.guard(['administrativo','superadmin']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  const [statsRes, pendingRes, utilityRes] = await Promise.all([
+    API.analytics.dashboard(),
+    API.payments.pending(),
+    API.analytics.utility({ year: new Date().getFullYear() }),
+  ]);
+
+  const s = statsRes.data;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat-card danger">
+      <div class="stat-value">${pendingRes.data.filter(r=>r.type==='REEMBOLSO').length}</div>
+      <div class="stat-label">Reembolsos por pagar</div>
+    </div>
+    <div class="stat-card success">
+      <div class="stat-value">${s.paid}</div>
+      <div class="stat-label">Pagados</div>
+    </div>
+    <div class="stat-card primary">
+      <div class="stat-value">${UI.money(s.total_mxn)}</div>
+      <div class="stat-label">Total gasto MXN</div>
+    </div>`;
+
+  // Reembolsos
+  const reembolsos = pendingRes.data.filter(r => r.type === 'REEMBOLSO');
+  document.getElementById('reembolsos-body').innerHTML = reembolsos.length
+    ? reembolsos.map(r => `<tr>
+        <td class="font-mono">${r.folio}</td>
+        <td>${r.requester_name}</td>
+        <td>${r.project_name}</td>
+        <td style="font-weight:600;">${UI.money(r.amount_mxn)}</td>
+        <td class="text-muted text-sm">${UI.fmt(r.created_at)}</td>
+        <td><button class="btn btn-success btn-xs" onclick="openPay('${r.id}','${r.folio}')">Pagar</button></td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;padding:24px;color:#059669;">✅ Sin reembolsos pendientes</td></tr>';
+
+  // Utilidad
+  const uRows = utilityRes.data;
+  document.getElementById('utility-body').innerHTML = uRows.length
+    ? uRows.map(u => `<tr>
+        <td>${u.project_name}</td>
+        <td>${u.year}-${String(u.month).padStart(2,'0')}</td>
+        <td>${UI.money(u.income_amount)}</td>
+        <td>${UI.money(u.expense_amount)}</td>
+        <td style="font-weight:700;color:${u.utility>=0?'#059669':'#dc2626'}">${UI.money(u.utility)}</td>
+        <td style="color:${u.margin_pct>=0?'#059669':'#dc2626'}">${(u.margin_pct||0).toFixed(1)}%</td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;padding:24px;color:#6b7280;">Sin datos de ingresos. <a href="presupuestos.html">Agregar ingresos</a></td></tr>';
+})();
+
+function openPay(id, folio) {
+  selectedId = id;
+  document.getElementById('pay-folio').textContent = `Solicitud: ${folio}`;
+  document.getElementById('modal-pay').classList.add('open');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.getElementById('btn-confirm-pay').onclick = async () => {
+  const btn = document.getElementById('btn-confirm-pay');
+  UI.loading(btn, true);
+  try {
+    await API.payments.execute(selectedId, {
+      payment_method: document.getElementById('pay-method').value,
+      payment_reference: document.getElementById('pay-ref').value,
+    });
+    UI.toast('Reembolso ejecutado', 'success');
+    closeModal('modal-pay');
+    setTimeout(() => location.reload(), 1000);
+  } catch (err) {
+    UI.toast(err.error || 'Error', 'error');
+    UI.loading(btn, false);
+  }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Compras — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Dashboard — Compras</h2>
+    </header>
+    <main class="page-body">
+      <div class="stats-grid" id="stats"></div>
+
+      <!-- Aprobadas listas para ejecutar -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title">Requisiciones Aprobadas — Pendientes de Compra</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Folio</th><th>Proyecto</th><th>Concepto</th><th>Monto MXN</th><th>Solicitante</th><th>Fecha</th><th></th>
+            </tr></thead>
+            <tbody id="pending-buy"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Compradas pendientes de factura -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Compradas — Pendiente Factura</span>
+          <a href="pending-factura.html" class="btn btn-warning btn-sm">Ver todas</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Folio</th><th>Proyecto</th><th>Monto MXN</th><th>Fecha Compra</th><th>Días</th><th></th>
+            </tr></thead>
+            <tbody id="pending-factura"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Modal Ejecutar Compra -->
+<div class="modal-overlay" id="modal-execute">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Ejecutar Compra</h3>
+      <button class="modal-close" onclick="closeModal('modal-execute')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="execute-folio" style="font-weight:600;margin-bottom:16px;"></p>
+      <div class="form-group">
+        <label>Método de pago *</label>
+        <select id="payment-method" class="form-control">
+          <option value="transferencia">Transferencia</option>
+          <option value="tarjeta">Tarjeta</option>
+          <option value="efectivo">Efectivo</option>
+          <option value="cheque">Cheque</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Referencia / Número de operación</label>
+        <input type="text" id="payment-ref" class="form-control" placeholder="Referencia...">
+      </div>
+      <div class="form-group">
+        <label>Notas</label>
+        <textarea id="payment-notes" class="form-control" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-execute')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-confirm-execute">🛒 Confirmar Compra</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+let selectedId = null;
+
+(async () => {
+  const user = UI.guard(['buyer','superadmin']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  const [statsRes, pendingRes, facturaRes] = await Promise.all([
+    API.analytics.dashboard(),
+    API.payments.pending(),
+    API.payments.pendingFactura(),
+  ]);
+
+  const s = statsRes.data;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat-card danger">
+      <div class="stat-value">${pendingRes.data.filter(r=>r.type==='REQUISICION').length}</div>
+      <div class="stat-label">Por comprar</div>
+    </div>
+    <div class="stat-card warning">
+      <div class="stat-value">${facturaRes.data.length}</div>
+      <div class="stat-label">Pte. factura</div>
+    </div>
+    <div class="stat-card success">
+      <div class="stat-value">${s.paid}</div>
+      <div class="stat-label">Completadas</div>
+    </div>`;
+
+  // Aprobadas
+  const buyRows = pendingRes.data.filter(r => r.type === 'REQUISICION');
+  document.getElementById('pending-buy').innerHTML = buyRows.length
+    ? buyRows.map(r => `<tr>
+        <td class="font-mono">${r.folio}</td>
+        <td>${r.project_name}</td>
+        <td>${r.concept_name}</td>
+        <td style="font-weight:600">${UI.money(r.amount_mxn)}</td>
+        <td>${r.requester_name}</td>
+        <td class="text-muted text-sm">${UI.fmt(r.created_at)}</td>
+        <td>
+          <button class="btn btn-primary btn-xs" onclick="openExecute('${r.id}','${r.folio}')">Ejecutar</button>
+          <a href="solicitud-detalle.html?id=${r.id}" class="btn btn-outline btn-xs">Ver</a>
+        </td>
+      </tr>`).join('')
+    : '<tr><td colspan="7" style="text-align:center;padding:24px;color:#059669;">✅ Sin compras pendientes</td></tr>';
+
+  // Pendiente factura
+  const fRows = facturaRes.data;
+  document.getElementById('pending-factura').innerHTML = fRows.length
+    ? fRows.map(r => {
+        const days = Math.floor((Date.now() - new Date(r.payment_date)) / 86400000);
+        return `<tr ${days >= 5 ? 'style="background:#fff7ed"' : ''}>
+          <td class="font-mono">${r.folio}</td>
+          <td>${r.project_name}</td>
+          <td>${UI.money(r.amount_mxn)}</td>
+          <td class="text-muted text-sm">${UI.fmt(r.payment_date)}</td>
+          <td style="color:${days>=5?'#dc2626':'#374151'};font-weight:600;">${days}d</td>
+          <td><a href="pending-factura.html?id=${r.id}" class="btn btn-warning btn-xs">Subir factura</a></td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="6" style="text-align:center;padding:24px;color:#059669;">✅ Sin facturas pendientes</td></tr>';
+})();
+
+function openExecute(id, folio) {
+  selectedId = id;
+  document.getElementById('execute-folio').textContent = `Solicitud: ${folio}`;
+  document.getElementById('modal-execute').classList.add('open');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.getElementById('btn-confirm-execute').onclick = async () => {
+  const btn = document.getElementById('btn-confirm-execute');
+  UI.loading(btn, true);
+  try {
+    await API.payments.execute(selectedId, {
+      payment_method:    document.getElementById('payment-method').value,
+      payment_reference: document.getElementById('payment-ref').value,
+      payment_notes:     document.getElementById('payment-notes').value,
+    });
+    UI.toast('Compra ejecutada correctamente', 'success');
+    closeModal('modal-execute');
+    setTimeout(() => location.reload(), 1000);
+  } catch (err) {
+    UI.toast(err.error || 'Error', 'error');
+    UI.loading(btn, false);
+  }
+};
+</script>
+</body>
+</html>

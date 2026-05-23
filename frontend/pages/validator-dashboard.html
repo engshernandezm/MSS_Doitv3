@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Validador — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Dashboard — Validador</h2>
+      <span id="badge-count" class="badge hidden"></span>
+    </header>
+    <main class="page-body">
+      <div class="stats-grid" id="stats"></div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Solicitudes Pendientes de Revisión</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Folio</th><th>Solicitante</th><th>Proyecto</th>
+                <th>Concepto</th><th>Monto MXN</th><th>Alertas</th><th>Días</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="pending-body">
+              <tr><td colspan="8" class="text-muted text-sm" style="padding:24px;text-align:center;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+(async () => {
+  const user = UI.guard(['validator','superadmin']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  try {
+    const [statsRes, pendingRes] = await Promise.all([
+      API.analytics.dashboard(),
+      API.approval.pending(),
+    ]);
+
+    const stats = statsRes.data;
+    const pending = pendingRes.data;
+
+    document.getElementById('badge-count').textContent = pending.length;
+    if (pending.length) document.getElementById('badge-count').classList.remove('hidden');
+
+    document.getElementById('stats').innerHTML = `
+      <div class="stat-card danger">
+        <div class="stat-value">${pending.length}</div>
+        <div class="stat-label">Por aprobar</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-value">${stats.approved}</div>
+        <div class="stat-label">Aprobadas hoy</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-value">${stats.duplicates}</div>
+        <div class="stat-label">Posibles duplicados</div>
+      </div>
+      <div class="stat-card primary">
+        <div class="stat-value">${stats.anomalies}</div>
+        <div class="stat-label">Anomalías ML</div>
+      </div>`;
+
+    const tbody = document.getElementById('pending-body');
+    if (!pending.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:#059669;">✅ Sin solicitudes pendientes</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = pending.map(r => {
+      const days = Math.floor((Date.now() - new Date(r.created_at)) / 86400000);
+      return `<tr ${days >= 2 ? 'style="background:#fff7ed"' : ''}>
+        <td class="font-mono">${r.folio}</td>
+        <td>${r.requester_name}</td>
+        <td>${r.project_name}</td>
+        <td>${r.concept_name}</td>
+        <td style="font-weight:600;">${UI.money(r.amount_mxn)}</td>
+        <td>${UI.alertFlags(r)}</td>
+        <td>
+          <span style="color:${days >= 2 ? '#dc2626' : days === 1 ? '#d97706' : '#059669'};font-weight:600;">
+            ${days}d
+          </span>
+        </td>
+        <td>
+          <a href="solicitud-detalle.html?id=${r.id}" class="btn btn-primary btn-xs">Revisar</a>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (err) {
+    document.getElementById('pending-body').innerHTML =
+      `<tr><td colspan="8" style="color:#dc2626;padding:16px;">${err.error || 'Error'}</td></tr>`;
+  }
+})();
+</script>
+</body>
+</html>

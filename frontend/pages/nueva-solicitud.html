@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nueva Solicitud — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Nueva Solicitud de Gasto</h2>
+    </header>
+    <main class="page-body" style="max-width:720px;">
+
+      <div id="result-alert" class="hidden"></div>
+
+      <div class="card">
+        <form id="request-form" enctype="multipart/form-data">
+
+          <!-- Sin factura toggle -->
+          <div class="alert alert-warning" id="sf-banner" style="display:none;">
+            <strong>⚠️ Sin Factura:</strong> Este gasto no cuenta con comprobante fiscal. Se requiere justificación detallada.
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Tipo de solicitud *</label>
+              <select id="type" name="type" class="form-control" required>
+                <option value="REEMBOLSO">💵 Reembolso (ya gasté)</option>
+                <option value="REQUISICION">🛒 Requisición (necesito comprar)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>¿Sin factura?</label>
+              <select id="sin_factura" name="sin_factura" class="form-control">
+                <option value="false">No — tengo comprobante fiscal</option>
+                <option value="true">Sí — sin comprobante fiscal</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Proyecto *</label>
+              <select id="project_id" name="project_id" class="form-control" required></select>
+            </div>
+            <div class="form-group">
+              <label>Categoría *</label>
+              <select id="category_id" name="category_id" class="form-control" required></select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Concepto *</label>
+            <select id="concept_id" name="concept_id" class="form-control" required></select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Monto *</label>
+              <input type="number" id="amount" name="amount" class="form-control"
+                     placeholder="0.00" min="0.01" step="0.01" required>
+            </div>
+            <div class="form-group">
+              <label>Moneda</label>
+              <select id="currency" name="currency" class="form-control">
+                <option value="MXN">MXN — Peso Mexicano</option>
+                <option value="USD">USD — Dólar</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group" id="exchange-group" style="display:none;">
+            <label>Tipo de cambio (1 USD = ? MXN)</label>
+            <input type="number" id="exchange_rate" name="exchange_rate" class="form-control"
+                   placeholder="17.50" min="0.0001" step="0.0001" value="17.50">
+          </div>
+
+          <!-- Zona de upload -->
+          <div class="form-group" id="upload-group">
+            <label>Comprobante (foto o PDF)</label>
+            <div class="upload-zone" id="upload-zone">
+              <input type="file" id="comprobante" name="comprobante"
+                     accept=".jpg,.jpeg,.png,.pdf,.heic,.webp">
+              <div class="icon">📎</div>
+              <div>Arrastra el archivo aquí o <strong>haz clic para seleccionar</strong></div>
+              <div class="hint">JPG, PNG, PDF, HEIC — máx 10 MB</div>
+            </div>
+            <div id="file-preview" style="margin-top:8px;font-size:12px;color:#059669;"></div>
+          </div>
+
+          <div class="form-group">
+            <label>Observaciones <span id="obs-required" style="color:#dc2626;"></span></label>
+            <textarea id="observations" name="observations" class="form-control"
+                      rows="3" placeholder="Describe el gasto, proveedor, motivo..."></textarea>
+            <div id="obs-count" class="text-muted text-sm mt-2">0 caracteres</div>
+          </div>
+
+          <div class="flex-between" style="margin-top:8px;">
+            <a href="operative-dashboard.html" class="btn btn-outline">Cancelar</a>
+            <button type="submit" id="btn-submit" class="btn btn-primary">
+              Enviar Solicitud
+            </button>
+          </div>
+        </form>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+(async () => {
+  const user = UI.guard(['operative','administrativo','buyer','superadmin']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  // Cargar proyectos
+  const { data: projects } = await API.admin.projects();
+  UI.populateSelect(document.getElementById('project_id'), projects, 'id', 'name', 'Proyecto');
+
+  // Cargar categorías
+  const { data: cats } = await API.admin.categories();
+  UI.populateSelect(document.getElementById('category_id'), cats, 'id', 'name', 'Categoría');
+
+  // Cargar conceptos al cambiar categoría
+  document.getElementById('category_id').addEventListener('change', async function() {
+    const { data: concepts } = await API.admin.concepts(this.value);
+    UI.populateSelect(document.getElementById('concept_id'), concepts, 'id', 'name', 'Concepto');
+  });
+
+  // Moneda → tipo de cambio
+  document.getElementById('currency').addEventListener('change', function() {
+    document.getElementById('exchange-group').style.display = this.value === 'USD' ? '' : 'none';
+  });
+
+  // Sin factura
+  document.getElementById('sin_factura').addEventListener('change', function() {
+    const sf = this.value === 'true';
+    document.getElementById('sf-banner').style.display = sf ? '' : 'none';
+    document.getElementById('upload-group').style.display = sf ? 'none' : '';
+    const req = document.getElementById('obs-required');
+    req.textContent = sf ? '* (mínimo 20 caracteres)' : '';
+  });
+
+  // Contador observaciones
+  document.getElementById('observations').addEventListener('input', function() {
+    document.getElementById('obs-count').textContent = `${this.value.length} caracteres`;
+  });
+
+  // Upload zone
+  const zone = document.getElementById('upload-zone');
+  const fileInput = document.getElementById('comprobante');
+  zone.addEventListener('click', () => fileInput.click());
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    if (e.dataTransfer.files[0]) { fileInput.files = e.dataTransfer.files; updatePreview(); }
+  });
+  fileInput.addEventListener('change', updatePreview);
+  function updatePreview() {
+    const f = fileInput.files[0];
+    document.getElementById('file-preview').textContent = f ? `✅ ${f.name} (${(f.size/1024/1024).toFixed(2)} MB)` : '';
+  }
+
+  // Submit
+  document.getElementById('request-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = document.getElementById('btn-submit');
+    const alert = document.getElementById('result-alert');
+    alert.className = 'hidden';
+
+    const sf = document.getElementById('sin_factura').value === 'true';
+    const obs = document.getElementById('observations').value.trim();
+
+    if (sf && obs.length < 20) {
+      alert.className = 'alert alert-danger';
+      alert.textContent = 'Sin factura requiere justificación de al menos 20 caracteres.';
+      return;
+    }
+
+    UI.loading(btn, true);
+
+    try {
+      const fd = new FormData(e.target);
+      const { data, warning } = await API.requests.create(fd);
+
+      alert.className = `alert ${warning ? 'alert-warning' : 'alert-success'}`;
+      alert.textContent = warning
+        ? `⚠️ ${warning}`
+        : `✅ Solicitud ${data.folio} enviada exitosamente`;
+
+      if (!warning) setTimeout(() => location.href = 'mis-solicitudes.html', 1500);
+    } catch (err) {
+      alert.className = 'alert alert-danger';
+      alert.textContent = err.error || 'Error al enviar la solicitud';
+    } finally {
+      UI.loading(btn, false);
+    }
+  });
+})();
+</script>
+</body>
+</html>

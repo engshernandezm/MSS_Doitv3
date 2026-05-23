@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Facturas Pendientes — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Compradas — Pendiente Factura</h2>
+    </header>
+    <main class="page-body">
+      <div class="alert alert-warning">
+        Las requisiciones marcadas aquí ya fueron compradas pero aún no tienen factura (CFDI) del proveedor.
+        Sube la factura cuando la recibas para cerrar el proceso.
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Folio</th><th>Proyecto</th><th>Monto MXN</th>
+              <th>Fecha Compra</th><th>Días sin factura</th><th>Acciones</th>
+            </tr></thead>
+            <tbody id="table-body">
+              <tr><td colspan="6" style="text-align:center;padding:24px;color:#6b7280;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Modal subir factura -->
+<div class="modal-overlay" id="modal-factura">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Subir Factura (CFDI)</h3>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="modal-folio" style="font-weight:600;margin-bottom:16px;"></p>
+      <div class="form-group">
+        <label>Archivo de factura (PDF o XML) *</label>
+        <div class="upload-zone" onclick="document.getElementById('factura-file').click()">
+          <input type="file" id="factura-file" accept=".pdf,.xml,.jpg,.jpeg,.png">
+          <div class="icon">🧾</div>
+          <div>Seleccionar archivo</div>
+          <div class="hint">PDF, XML, JPG — máx 10 MB</div>
+        </div>
+        <div id="file-preview" class="text-sm" style="color:#059669;margin-top:4px;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-success" id="btn-upload">📤 Subir Factura</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+let selectedId = null;
+
+(async () => {
+  const user = UI.guard(['buyer','administrativo','superadmin']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  try {
+    const { data } = await API.payments.pendingFactura();
+    const tbody = document.getElementById('table-body');
+
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:#059669;">✅ Sin facturas pendientes</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.map(r => {
+      const days = Math.floor((Date.now() - new Date(r.payment_date)) / 86400000);
+      return `<tr ${days >= 5 ? 'style="background:#fff7ed"' : ''}>
+        <td class="font-mono">${r.folio}</td>
+        <td>${r.project_name}</td>
+        <td style="font-weight:600;">${UI.money(r.amount_mxn)}</td>
+        <td class="text-muted text-sm">${UI.fmt(r.payment_date)}</td>
+        <td>
+          <span style="font-weight:700;color:${days>=5?'#dc2626':days>=3?'#d97706':'#374151'};">
+            ${days} días
+          </span>
+        </td>
+        <td>
+          <button class="btn btn-warning btn-xs" onclick="openUpload('${r.id}','${r.folio}')">
+            📤 Subir factura
+          </button>
+          <a href="solicitud-detalle.html?id=${r.id}" class="btn btn-outline btn-xs">Ver detalle</a>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (err) {
+    document.getElementById('table-body').innerHTML =
+      `<tr><td colspan="6" style="color:#dc2626;padding:16px;">${err.error || 'Error cargando datos'}</td></tr>`;
+  }
+
+  document.getElementById('factura-file').addEventListener('change', function() {
+    const f = this.files[0];
+    document.getElementById('file-preview').textContent = f
+      ? `✅ ${f.name} (${(f.size/1024/1024).toFixed(2)} MB)` : '';
+  });
+})();
+
+function openUpload(id, folio) {
+  selectedId = id;
+  document.getElementById('modal-folio').textContent = `Solicitud: ${folio}`;
+  document.getElementById('factura-file').value = '';
+  document.getElementById('file-preview').textContent = '';
+  document.getElementById('modal-factura').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal-factura').classList.remove('open'); }
+
+document.getElementById('btn-upload').onclick = async () => {
+  const file = document.getElementById('factura-file').files[0];
+  if (!file) { UI.toast('Selecciona un archivo primero', 'error'); return; }
+
+  const btn = document.getElementById('btn-upload');
+  UI.loading(btn, true);
+
+  try {
+    const fd = new FormData();
+    fd.append('factura', file);
+    await API.payments.attachFactura(selectedId, fd);
+    UI.toast('Factura subida — solicitud cerrada', 'success');
+    closeModal();
+    setTimeout(() => location.reload(), 1000);
+  } catch (err) {
+    UI.toast(err.error || 'Error subiendo factura', 'error');
+    UI.loading(btn, false);
+  }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Presupuestos — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Presupuestos e Ingresos</h2>
+    </header>
+    <main class="page-body">
+
+      <!-- Ingresos por proyecto -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title">Registrar Ingreso Mensual</span>
+        </div>
+        <form id="income-form" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-items:end;">
+          <div class="form-group">
+            <label>Proyecto *</label>
+            <select id="inc-project" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label>Año *</label>
+            <input type="number" id="inc-year" class="form-control" value="2025" min="2020" required>
+          </div>
+          <div class="form-group">
+            <label>Mes *</label>
+            <select id="inc-month" class="form-control" required>
+              <option value="1">Enero</option><option value="2">Febrero</option>
+              <option value="3">Marzo</option><option value="4">Abril</option>
+              <option value="5">Mayo</option><option value="6">Junio</option>
+              <option value="7">Julio</option><option value="8">Agosto</option>
+              <option value="9">Septiembre</option><option value="10">Octubre</option>
+              <option value="11">Noviembre</option><option value="12">Diciembre</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Ingreso MXN *</label>
+            <input type="number" id="inc-amount" class="form-control" placeholder="0.00" min="0" step="0.01" required>
+          </div>
+          <div class="form-group">
+            <label>Notas</label>
+            <input type="text" id="inc-notes" class="form-control" placeholder="Opcional">
+          </div>
+          <div class="form-group">
+            <label>&nbsp;</label>
+            <button type="submit" class="btn btn-success w-full" id="btn-income">Guardar Ingreso</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Presupuesto por categoría -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title">Configurar Presupuesto por Categoría</span>
+        </div>
+        <form id="budget-form" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-items:end;">
+          <div class="form-group">
+            <label>Proyecto *</label>
+            <select id="bud-project" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label>Categoría *</label>
+            <select id="bud-category" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label>Año *</label>
+            <input type="number" id="bud-year" class="form-control" value="2025" min="2020" required>
+          </div>
+          <div class="form-group">
+            <label>Mes *</label>
+            <select id="bud-month" class="form-control" required>
+              <option value="1">Enero</option><option value="2">Febrero</option>
+              <option value="3">Marzo</option><option value="4">Abril</option>
+              <option value="5">Mayo</option><option value="6">Junio</option>
+              <option value="7">Julio</option><option value="8">Agosto</option>
+              <option value="9">Septiembre</option><option value="10">Octubre</option>
+              <option value="11">Noviembre</option><option value="12">Diciembre</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Presupuesto MXN *</label>
+            <input type="number" id="bud-amount" class="form-control" placeholder="0.00" min="0" step="0.01" required>
+          </div>
+          <div class="form-group">
+            <label>Alerta amarilla %</label>
+            <input type="number" id="bud-yellow" class="form-control" value="70" min="1" max="99">
+          </div>
+          <div class="form-group">
+            <label>Alerta roja %</label>
+            <input type="number" id="bud-red" class="form-control" value="90" min="1" max="100">
+          </div>
+          <div class="form-group">
+            <label>&nbsp;</label>
+            <button type="submit" class="btn btn-primary w-full" id="btn-budget">Guardar Presupuesto</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tabla semáforo -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Consumo vs. Presupuesto</span>
+          <div class="flex gap-2">
+            <select id="view-year" class="form-control" style="width:90px;"></select>
+            <select id="view-month" class="form-control" style="width:110px;"></select>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Proyecto</th><th>Categoría</th>
+              <th>Presupuesto</th><th>Consumido</th><th>%</th><th>Semáforo</th>
+            </tr></thead>
+            <tbody id="budget-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+(async () => {
+  const user = UI.guard(['superadmin','administrativo']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  const [projectsRes, catsRes] = await Promise.all([API.admin.projects(), API.admin.categories()]);
+  const projects = projectsRes.data, cats = catsRes.data;
+
+  UI.populateSelect(document.getElementById('inc-project'), projects, 'id', 'name', 'Proyecto');
+  UI.populateSelect(document.getElementById('bud-project'), projects, 'id', 'name', 'Proyecto');
+  UI.populateSelect(document.getElementById('bud-category'), cats, 'id', 'name', 'Categoría');
+
+  // Vista año/mes
+  const now = new Date();
+  const yearSel = document.getElementById('view-year');
+  const monthSel = document.getElementById('view-month');
+  for (let y = now.getFullYear(); y >= now.getFullYear()-2; y--) {
+    yearSel.innerHTML += `<option value="${y}" ${y===now.getFullYear()?'selected':''}>${y}</option>`;
+  }
+  ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'].forEach((m,i) => {
+    monthSel.innerHTML += `<option value="${i+1}" ${i+1===now.getMonth()+1?'selected':''}>${m}</option>`;
+  });
+
+  const loadBudgetTable = async () => {
+    try {
+      const { data } = await API.analytics.budgets({ year: yearSel.value, month: monthSel.value });
+      const tbody = document.getElementById('budget-table');
+      if (!data.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:#6b7280;">Sin presupuestos</td></tr>'; return; }
+      tbody.innerHTML = data.map(b => `<tr>
+        <td>${b.project_name}</td><td>${b.category_name}</td>
+        <td>${UI.money(b.budget_amount)}</td><td>${UI.money(b.consumed_amount)}</td>
+        <td style="font-weight:700;color:${b.semaforo==='rojo'?'#dc2626':b.semaforo==='amarillo'?'#d97706':'#059669'}">
+          ${(b.pct_consumed||0).toFixed(1)}%</td>
+        <td>${UI.semaforo(b.semaforo)}</td>
+      </tr>`).join('');
+    } catch { }
+  };
+
+  yearSel.addEventListener('change', loadBudgetTable);
+  monthSel.addEventListener('change', loadBudgetTable);
+  loadBudgetTable();
+
+  // Income form
+  document.getElementById('income-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = document.getElementById('btn-income');
+    UI.loading(btn, true);
+    try {
+      await API.analytics.income({
+        project_id: document.getElementById('inc-project').value,
+        year:       parseInt(document.getElementById('inc-year').value),
+        month:      parseInt(document.getElementById('inc-month').value),
+        amount:     parseFloat(document.getElementById('inc-amount').value),
+        notes:      document.getElementById('inc-notes').value,
+      });
+      UI.toast('Ingreso guardado', 'success');
+      e.target.reset();
+      loadBudgetTable();
+    } catch (err) { UI.toast(err.error || 'Error', 'error'); }
+    finally { UI.loading(btn, false); }
+  });
+
+  // Budget form
+  document.getElementById('budget-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = document.getElementById('btn-budget');
+    UI.loading(btn, true);
+    try {
+      await API.analytics.income; // unused
+      const res = await fetch(`${window.API_URL}/api/analytics/budgets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API.token()}` },
+        body: JSON.stringify({
+          project_id:        document.getElementById('bud-project').value,
+          category_id:       document.getElementById('bud-category').value,
+          year:              parseInt(document.getElementById('bud-year').value),
+          month:             parseInt(document.getElementById('bud-month').value),
+          amount:            parseFloat(document.getElementById('bud-amount').value),
+          threshold_yellow:  parseFloat(document.getElementById('bud-yellow').value),
+          threshold_red:     parseFloat(document.getElementById('bud-red').value),
+        }),
+      });
+      if (!res.ok) throw await res.json();
+      UI.toast('Presupuesto guardado', 'success');
+      e.target.reset();
+      loadBudgetTable();
+    } catch (err) { UI.toast(err.error || 'Error', 'error'); }
+    finally { UI.loading(btn, false); }
+  });
+})();
+</script>
+</body>
+</html>

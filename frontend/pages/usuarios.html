@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Usuarios — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Gestión de Usuarios</h2>
+      <button class="btn btn-primary btn-sm" onclick="openModal('modal-user')">➕ Nuevo Usuario</button>
+    </header>
+    <main class="page-body">
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Nombre</th><th>Email</th><th>Rol</th><th>Teléfono</th>
+              <th>Notificaciones</th><th>Estado</th><th>Proyectos</th><th></th>
+            </tr></thead>
+            <tbody id="users-body">
+              <tr><td colspan="8" style="text-align:center;padding:24px;color:#6b7280;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Modal Nuevo/Editar Usuario -->
+<div class="modal-overlay" id="modal-user">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-user-title">Nuevo Usuario</h3>
+      <button class="modal-close" onclick="closeModal('modal-user')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="user-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nombre *</label>
+          <input type="text" id="user-name" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label>Email *</label>
+          <input type="email" id="user-email" class="form-control" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Rol *</label>
+          <select id="user-role" class="form-control">
+            <option value="operative">Operativo</option>
+            <option value="validator">Validador</option>
+            <option value="administrativo">Administrativo</option>
+            <option value="buyer">Comprador</option>
+            <option value="superadmin">Superadmin</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Canal notificaciones</label>
+          <select id="user-channel" class="form-control">
+            <option value="email">Email</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="both">Ambos</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Teléfono (con código de país)</label>
+        <input type="text" id="user-phone" class="form-control" placeholder="+5215512345678">
+      </div>
+      <div id="password-group" class="form-group">
+        <label>Contraseña * (mínimo 8 caracteres)</label>
+        <input type="password" id="user-password" class="form-control">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-user')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-save-user">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+let users = [];
+
+(async () => {
+  const user = UI.guard(['superadmin']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+  await loadUsers();
+})();
+
+async function loadUsers() {
+  try {
+    const { data } = await API.admin.users();
+    users = data;
+    const tbody = document.getElementById('users-body');
+    tbody.innerHTML = data.map(u => `
+      <tr style="${!u.active ? 'opacity:.5' : ''}">
+        <td>${u.name}</td>
+        <td>${u.email}</td>
+        <td><span class="badge-status badge-APROBADO">${u.role}</span></td>
+        <td class="font-mono text-sm">${u.phone || '—'}</td>
+        <td>${u.notification_channel}</td>
+        <td>${u.active ? '✅ Activo' : '🚫 Inactivo'}</td>
+        <td>—</td>
+        <td>
+          <button class="btn btn-outline btn-xs" onclick="editUser('${u.id}')">Editar</button>
+          <button class="btn btn-outline btn-xs" onclick="toggleActive('${u.id}', ${u.active})">${u.active ? 'Desactivar' : 'Activar'}</button>
+        </td>
+      </tr>`).join('');
+  } catch (err) {
+    document.getElementById('users-body').innerHTML =
+      `<tr><td colspan="8" style="color:#dc2626;padding:16px;">${err.error || 'Error'}</td></tr>`;
+  }
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function editUser(id) {
+  const u = users.find(x => x.id === id);
+  if (!u) return;
+  document.getElementById('modal-user-title').textContent = 'Editar Usuario';
+  document.getElementById('user-id').value        = u.id;
+  document.getElementById('user-name').value      = u.name;
+  document.getElementById('user-email').value     = u.email;
+  document.getElementById('user-role').value      = u.role;
+  document.getElementById('user-channel').value   = u.notification_channel;
+  document.getElementById('user-phone').value     = u.phone || '';
+  document.getElementById('user-password').value  = '';
+  document.getElementById('password-group').querySelector('label').textContent = 'Nueva contraseña (dejar en blanco para no cambiar)';
+  openModal('modal-user');
+}
+
+async function toggleActive(id, current) {
+  try {
+    await API.admin.updateUser(id, { active: !current });
+    UI.toast(!current ? 'Usuario activado' : 'Usuario desactivado', 'success');
+    await loadUsers();
+  } catch (err) { UI.toast(err.error || 'Error', 'error'); }
+}
+
+document.getElementById('btn-save-user').onclick = async () => {
+  const btn = document.getElementById('btn-save-user');
+  const id  = document.getElementById('user-id').value;
+  const pass = document.getElementById('user-password').value;
+
+  const body = {
+    name:                 document.getElementById('user-name').value,
+    email:                document.getElementById('user-email').value,
+    role:                 document.getElementById('user-role').value,
+    phone:                document.getElementById('user-phone').value,
+    notification_channel: document.getElementById('user-channel').value,
+  };
+
+  if (!id && !pass) { UI.toast('La contraseña es requerida para nuevo usuario', 'error'); return; }
+  if (pass) body.password = pass;
+
+  UI.loading(btn, true);
+  try {
+    if (id) {
+      await API.admin.updateUser(id, body);
+      if (pass) await API.admin.resetPassword(id, pass);
+      UI.toast('Usuario actualizado', 'success');
+    } else {
+      await API.admin.createUser(body);
+      UI.toast('Usuario creado', 'success');
+    }
+    closeModal('modal-user');
+    document.getElementById('user-id').value = '';
+    document.getElementById('modal-user-title').textContent = 'Nuevo Usuario';
+    await loadUsers();
+  } catch (err) {
+    UI.toast(err.error || 'Error guardando usuario', 'error');
+  } finally {
+    UI.loading(btn, false);
+  }
+};
+</script>
+</body>
+</html>

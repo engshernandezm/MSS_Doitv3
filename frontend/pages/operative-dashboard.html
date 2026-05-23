@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Mi Dashboard</h2>
+      <a href="nueva-solicitud.html" class="btn btn-primary btn-sm">➕ Nueva Solicitud</a>
+    </header>
+    <main class="page-body">
+      <div class="stats-grid" id="stats"></div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Mis Solicitudes Recientes</span>
+          <a href="mis-solicitudes.html" class="btn btn-outline btn-sm">Ver todas</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Folio</th><th>Proyecto</th><th>Concepto</th>
+                <th>Monto MXN</th><th>Estado</th><th>Alertas</th><th>Fecha</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="requests-body">
+              <tr><td colspan="8" class="text-muted text-sm" style="padding:24px;text-align:center;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+(async () => {
+  const user = UI.guard(['operative']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  // Stats
+  try {
+    const { data: stats } = await API.analytics.dashboard();
+    document.getElementById('stats').innerHTML = `
+      <div class="stat-card primary">
+        <div class="stat-value">${stats.pending_approval}</div>
+        <div class="stat-label">En Revisión</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-value">${stats.approved}</div>
+        <div class="stat-label">Aprobadas</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-value">${stats.pending_factura}</div>
+        <div class="stat-label">Pte. Factura</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${UI.money(stats.total_mxn)}</div>
+        <div class="stat-label">Total solicitado MXN</div>
+      </div>`;
+  } catch { }
+
+  // Solicitudes
+  try {
+    const { data } = await API.requests.list({ limit: 10 });
+    const tbody = document.getElementById('requests-body');
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:#6b7280;">Aún no tienes solicitudes. ¡Crea la primera!</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(r => `
+      <tr>
+        <td class="font-mono">${r.folio}</td>
+        <td>${r.project_name} <span class="text-muted">(${r.project_code})</span></td>
+        <td>${r.concept_name}</td>
+        <td>${UI.money(r.amount_mxn)}</td>
+        <td>${UI.statusBadge(r.status)}</td>
+        <td>${UI.alertFlags(r)}</td>
+        <td class="text-muted text-sm">${UI.fmt(r.created_at)}</td>
+        <td><a href="solicitud-detalle.html?id=${r.id}" class="btn btn-outline btn-xs">Ver</a></td>
+      </tr>`).join('');
+  } catch (err) {
+    document.getElementById('requests-body').innerHTML =
+      '<tr><td colspan="8" style="color:#dc2626;padding:16px;">Error cargando solicitudes</td></tr>';
+  }
+})();
+</script>
+</body>
+</html>
