@@ -10,6 +10,7 @@ const approvalRoutes  = require('./routes/approval.routes');
 const paymentRoutes   = require('./routes/payments.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const adminRoutes     = require('./routes/admin.routes');
+const catalogRoutes   = require('./routes/catalog.routes');
 const whatsappRoutes  = require('./routes/whatsapp.routes');
 const cronJobs        = require('../application/CronJobs');
 
@@ -48,6 +49,7 @@ app.use('/api/approval',  approvalRoutes);
 app.use('/api/payments',  paymentRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin',     adminRoutes);
+app.use('/api/catalog',   catalogRoutes);
 app.use('/api/whatsapp',  whatsappRoutes);
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────

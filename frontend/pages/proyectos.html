@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Proyectos — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Gestión de Proyectos</h2>
+      <button class="btn btn-primary btn-sm" onclick="openModal()">➕ Nuevo Proyecto</button>
+    </header>
+    <main class="page-body">
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Nombre</th><th>Código</th><th>Cliente</th><th>Estado</th><th></th>
+            </tr></thead>
+            <tbody id="projects-body">
+              <tr><td colspan="5" style="text-align:center;padding:24px;color:#6b7280;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal-project">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">Nuevo Proyecto</h3>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="proj-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nombre *</label>
+          <input type="text" id="proj-name" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label>Código * (máx. 10 caracteres)</label>
+          <input type="text" id="proj-code" class="form-control" maxlength="10" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Cliente</label>
+        <input type="text" id="proj-client" class="form-control">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+let projects = [];
+
+(async () => {
+  const user = UI.guard(['superadmin']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+  await load();
+})();
+
+async function load() {
+  try {
+    const { data } = await API.admin.projects();
+    projects = data;
+    const tbody = document.getElementById('projects-body');
+    tbody.innerHTML = data.map(p => `
+      <tr style="${!p.is_active ? 'opacity:.5' : ''}">
+        <td>${p.name}</td>
+        <td class="font-mono">${p.code}</td>
+        <td>${p.client || '—'}</td>
+        <td>${p.is_active ? '✅ Activo' : '🚫 Inactivo'}</td>
+        <td>
+          <button class="btn btn-outline btn-xs" onclick="edit('${p.id}')">Editar</button>
+          <button class="btn btn-outline btn-xs" onclick="toggle('${p.id}', ${p.is_active})">
+            ${p.is_active ? 'Desactivar' : 'Activar'}
+          </button>
+        </td>
+      </tr>`).join('');
+  } catch (err) {
+    document.getElementById('projects-body').innerHTML =
+      `<tr><td colspan="5" style="color:#dc2626;padding:16px;">${err.error || 'Error'}</td></tr>`;
+  }
+}
+
+function openModal() {
+  document.getElementById('modal-title').textContent = 'Nuevo Proyecto';
+  document.getElementById('proj-id').value = '';
+  document.getElementById('proj-name').value = '';
+  document.getElementById('proj-code').value = '';
+  document.getElementById('proj-client').value = '';
+  document.getElementById('modal-project').classList.add('open');
+}
+
+function edit(id) {
+  const p = projects.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('modal-title').textContent = 'Editar Proyecto';
+  document.getElementById('proj-id').value     = p.id;
+  document.getElementById('proj-name').value   = p.name;
+  document.getElementById('proj-code').value   = p.code;
+  document.getElementById('proj-client').value = p.client || '';
+  document.getElementById('modal-project').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-project').classList.remove('open');
+}
+
+async function toggle(id, current) {
+  try {
+    await API.admin.updateProject(id, { is_active: !current });
+    UI.toast(!current ? 'Proyecto activado' : 'Proyecto desactivado', 'success');
+    await load();
+  } catch (err) { UI.toast(err.error || 'Error', 'error'); }
+}
+
+document.getElementById('btn-save').onclick = async () => {
+  const btn = document.getElementById('btn-save');
+  const id  = document.getElementById('proj-id').value;
+  const body = {
+    name:   document.getElementById('proj-name').value,
+    code:   document.getElementById('proj-code').value,
+    client: document.getElementById('proj-client').value,
+  };
+  UI.loading(btn, true);
+  try {
+    if (id) {
+      await API.admin.updateProject(id, body);
+      UI.toast('Proyecto actualizado', 'success');
+    } else {
+      await API.admin.createProject(body);
+      UI.toast('Proyecto creado', 'success');
+    }
+    closeModal();
+    await load();
+  } catch (err) { UI.toast(err.error || 'Error', 'error'); }
+  finally { UI.loading(btn, false); }
+};
+</script>
+</body>
+</html>

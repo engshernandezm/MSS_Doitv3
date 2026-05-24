@@ -57,12 +57,14 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+const isUuidLike = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
 // POST /api/requests — crear solicitud
 router.post('/',
   upload.single('comprobante'),
-  body('project_id').isUUID(),
-  body('concept_id').isUUID(),
-  body('category_id').isUUID(),
+  body('project_id').custom(isUuidLike),
+  body('concept_id').custom(isUuidLike),
+  body('category_id').custom(isUuidLike),
   body('type').isIn(['REEMBOLSO', 'REQUISICION']),
   body('amount').isFloat({ min: 0.01 }),
   body('currency').optional().isIn(['MXN', 'USD']),

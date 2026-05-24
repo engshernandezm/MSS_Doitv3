@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Por Aprobar — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Solicitudes por Aprobar</h2>
+    </header>
+    <main class="page-body">
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Folio</th><th>Tipo</th><th>Solicitante</th><th>Proyecto</th>
+              <th>Concepto</th><th>Monto MXN</th><th>Alertas</th><th>Fecha</th><th></th>
+            </tr></thead>
+            <tbody id="pending-body">
+              <tr><td colspan="9" style="text-align:center;padding:24px;color:#6b7280;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+(async () => {
+  const user = UI.guard(['validator', 'superadmin']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  const tbody = document.getElementById('pending-body');
+  try {
+    const { data } = await API.approval.pending();
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:#6b7280;">Sin solicitudes pendientes</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(r => `
+      <tr>
+        <td class="font-mono">${r.folio || '—'}</td>
+        <td><span class="badge-status badge-${r.type}">${r.type}</span></td>
+        <td>${r.requester_name}</td>
+        <td>${r.project_name}</td>
+        <td>${r.concept_name}</td>
+        <td>${UI.money(r.amount_mxn)}</td>
+        <td>${UI.alertFlags(r)}</td>
+        <td class="text-muted text-sm">${UI.fmt(r.created_at)}</td>
+        <td><a href="solicitud-detalle.html?id=${r.id}" class="btn btn-primary btn-xs">Revisar</a></td>
+      </tr>`).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="9" style="color:#dc2626;padding:16px;">${err.error || 'Error cargando solicitudes'}</td></tr>`;
+  }
+})();
+</script>
+</body>
+</html>

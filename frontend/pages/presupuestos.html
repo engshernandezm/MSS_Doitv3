@@ -135,7 +135,7 @@
   if (!user) return;
   document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
 
-  const [projectsRes, catsRes] = await Promise.all([API.admin.projects(), API.admin.categories()]);
+  const [projectsRes, catsRes] = await Promise.all([API.catalog.projects(), API.catalog.categories()]);
   const projects = projectsRes.data, cats = catsRes.data;
 
   UI.populateSelect(document.getElementById('inc-project'), projects, 'id', 'name', 'Proyecto');

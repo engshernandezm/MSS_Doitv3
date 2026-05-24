@@ -61,7 +61,7 @@ router.post('/:id/approve',
       // Para reembolsos: notificar a Anna (administrativo)
       if (request.type === 'REEMBOLSO') {
         const { rows: admins } = await pool.query(
-          `SELECT * FROM users WHERE role='administrativo' AND active=true`
+          `SELECT * FROM users WHERE role='administrativo' AND is_active=true`
         );
         for (const admin of admins) {
           await notifSvc.notify('REEMBOLSO_APROBADO', admin, fullReq);
@@ -71,7 +71,7 @@ router.post('/:id/approve',
       // Para requisiciones: notificar a Irving (buyer)
       if (request.type === 'REQUISICION') {
         const { rows: buyers } = await pool.query(
-          `SELECT * FROM users WHERE role='buyer' AND active=true`
+          `SELECT * FROM users WHERE role='buyer' AND is_active=true`
         );
         for (const buyer of buyers) {
           await notifSvc.notify('COMPRA_APROBADA', buyer, fullReq);

@@ -120,19 +120,36 @@
   if (!user) return;
   document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
 
-  // Cargar proyectos
-  const { data: projects } = await API.admin.projects();
-  UI.populateSelect(document.getElementById('project_id'), projects, 'id', 'name', 'Proyecto');
+  // Cargar proyectos y categorías en paralelo
+  try {
+    const [projRes, catRes] = await Promise.all([
+      API.catalog.projects(),
+      API.catalog.categories(),
+    ]);
+    UI.populateSelect(document.getElementById('project_id'), projRes.data, 'id', 'name', 'Proyecto');
+    UI.populateSelect(document.getElementById('category_id'), catRes.data, 'id', 'name', 'Categoría');
 
-  // Cargar categorías
-  const { data: cats } = await API.admin.categories();
-  UI.populateSelect(document.getElementById('category_id'), cats, 'id', 'name', 'Categoría');
+    // Auto-cargar conceptos de la primera categoría disponible
+    const catSel = document.getElementById('category_id');
+    if (catRes.data.length > 0) {
+      catSel.value = catRes.data[0].id;
+      await loadConcepts(catRes.data[0].id);
+    }
+  } catch (err) {
+    UI.toast('Error cargando catálogos: ' + (err.error || err.message || 'Error'), 'error');
+  }
 
-  // Cargar conceptos al cambiar categoría
+  // Recargar conceptos al cambiar categoría
   document.getElementById('category_id').addEventListener('change', async function() {
-    const { data: concepts } = await API.admin.concepts(this.value);
-    UI.populateSelect(document.getElementById('concept_id'), concepts, 'id', 'name', 'Concepto');
+    await loadConcepts(this.value);
   });
+
+  async function loadConcepts(categoryId) {
+    try {
+      const { data: concepts } = await API.catalog.concepts(categoryId);
+      UI.populateSelect(document.getElementById('concept_id'), concepts, 'id', 'name', 'Concepto');
+    } catch { UI.toast('Error cargando conceptos', 'error'); }
+  }
 
   // Moneda → tipo de cambio
   document.getElementById('currency').addEventListener('change', function() {

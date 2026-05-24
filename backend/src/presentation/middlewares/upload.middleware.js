@@ -1,10 +1,14 @@
 const multer = require('multer');
 const path   = require('path');
 const crypto = require('crypto');
+const fs     = require('fs');
+
+const uploadsDir = path.resolve(process.env.UPLOADS_DIR || './uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, process.env.UPLOADS_DIR || './uploads');
+    cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
     const ext  = path.extname(file.originalname).toLowerCase();

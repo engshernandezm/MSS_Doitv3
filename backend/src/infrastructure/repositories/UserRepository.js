@@ -10,15 +10,15 @@ class UserRepository {
 
   async findById(id) {
     const { rows } = await pool.query(
-      'SELECT id,name,email,role,phone,notification_channel,active FROM users WHERE id=$1', [id]
+      'SELECT id,name,email,role,phone_whatsapp AS phone,notification_channel,is_active FROM users WHERE id=$1', [id]
     );
     return rows[0] || null;
   }
 
   async findAll({ role, active = true } = {}) {
-    let q = 'SELECT id,name,email,role,phone,notification_channel,active FROM users WHERE 1=1';
+    let q = 'SELECT id,name,email,role,phone_whatsapp AS phone,notification_channel,is_active FROM users WHERE 1=1';
     const params = [];
-    if (active !== null) { params.push(active); q += ` AND active=$${params.length}`; }
+    if (active !== null) { params.push(active); q += ` AND is_active=$${params.length}`; }
     if (role)            { params.push(role);   q += ` AND role=$${params.length}`; }
     q += ' ORDER BY name';
     const { rows } = await pool.query(q, params);
@@ -27,15 +27,15 @@ class UserRepository {
 
   async create({ name, email, password_hash, role, phone, notification_channel = 'email' }) {
     const { rows } = await pool.query(
-      `INSERT INTO users (name,email,password_hash,role,phone,notification_channel,phone_verified,active)
-       VALUES ($1,$2,$3,$4,$5,$6,true,true) RETURNING id,name,email,role,phone,notification_channel`,
+      `INSERT INTO users (name,email,password_hash,role,phone_whatsapp,notification_channel,phone_verified,is_active)
+       VALUES ($1,$2,$3,$4,$5,$6,true,true) RETURNING id,name,email,role,phone_whatsapp AS phone,notification_channel`,
       [name, email.toLowerCase(), password_hash, role, phone, notification_channel]
     );
     return rows[0];
   }
 
   async update(id, fields) {
-    const allowed = ['name','email','phone','role','notification_channel','active'];
+    const allowed = ['name','email','phone_whatsapp','role','notification_channel','is_active'];
     const sets = [];
     const vals = [];
     for (const [k, v] of Object.entries(fields)) {
@@ -44,7 +44,7 @@ class UserRepository {
     if (!sets.length) return null;
     vals.push(id);
     const { rows } = await pool.query(
-      `UPDATE users SET ${sets.join(',')} WHERE id=$${vals.length} RETURNING id,name,email,role,phone,notification_channel,active`,
+      `UPDATE users SET ${sets.join(',')} WHERE id=$${vals.length} RETURNING id,name,email,role,phone_whatsapp AS phone,notification_channel,is_active`,
       vals
     );
     return rows[0];
@@ -79,9 +79,9 @@ class UserRepository {
 
   async findProjectUsers(projectId) {
     const { rows } = await pool.query(
-      `SELECT u.id,u.name,u.email,u.role,u.phone,u.notification_channel
+      `SELECT u.id,u.name,u.email,u.role,u.phone_whatsapp AS phone,u.notification_channel
        FROM users u JOIN user_projects up ON up.user_id=u.id
-       WHERE up.project_id=$1 AND u.active=true ORDER BY u.name`,
+       WHERE up.project_id=$1 AND u.is_active=true ORDER BY u.name`,
       [projectId]
     );
     return rows;
@@ -103,7 +103,7 @@ class UserRepository {
   async getUserProjects(userId) {
     const { rows } = await pool.query(
       `SELECT p.* FROM projects p JOIN user_projects up ON up.project_id=p.id
-       WHERE up.user_id=$1 AND p.active=true ORDER BY p.name`,
+       WHERE up.user_id=$1 AND p.is_active=true ORDER BY p.name`,
       [userId]
     );
     return rows;

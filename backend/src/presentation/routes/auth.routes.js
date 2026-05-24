@@ -21,7 +21,7 @@ router.post('/login',
   async (req, res) => {
     try {
       const user = await userRepo.findByEmail(req.body.email);
-      if (!user || !user.active) return res.status(401).json({ error: 'Credenciales inválidas' });
+      if (!user || !user.is_active) return res.status(401).json({ error: 'Credenciales inválidas' });
 
       const ok = await bcrypt.compare(req.body.password, user.password_hash);
       if (!ok) return res.status(401).json({ error: 'Credenciales inválidas' });

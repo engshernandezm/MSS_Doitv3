@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catálogos — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Catálogos</h2>
+    </header>
+    <main class="page-body">
+
+      <!-- Categorías -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title">Categorías</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nombre</th><th>Código</th><th>Estado</th></tr></thead>
+            <tbody id="cats-body">
+              <tr><td colspan="3" style="text-align:center;padding:24px;color:#6b7280;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Conceptos -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Conceptos</span>
+          <div class="flex gap-2">
+            <select id="f-cat" class="form-control" style="width:180px;" onchange="loadConcepts()">
+              <option value="">Todas las categorías</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Concepto</th><th>Código</th><th>Categoría</th><th>Estado</th></tr></thead>
+            <tbody id="concepts-body">
+              <tr><td colspan="4" style="text-align:center;padding:24px;color:#6b7280;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+(async () => {
+  const user = UI.guard(['superadmin']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  try {
+    const { data: cats } = await API.admin.categories();
+    const tbody = document.getElementById('cats-body');
+    tbody.innerHTML = cats.map(c => `
+      <tr>
+        <td>${c.name}</td>
+        <td class="font-mono">${c.code}</td>
+        <td>${c.is_active ? '✅ Activo' : '🚫 Inactivo'}</td>
+      </tr>`).join('');
+
+    const sel = document.getElementById('f-cat');
+    cats.forEach(c => sel.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+  } catch (err) {
+    document.getElementById('cats-body').innerHTML =
+      `<tr><td colspan="3" style="color:#dc2626;padding:16px;">${err.error || 'Error'}</td></tr>`;
+  }
+
+  await loadConcepts();
+})();
+
+async function loadConcepts() {
+  const catId = document.getElementById('f-cat').value;
+  const tbody = document.getElementById('concepts-body');
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:16px;color:#6b7280;">Cargando...</td></tr>';
+  try {
+    const { data } = await API.admin.concepts(catId);
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:16px;color:#6b7280;">Sin conceptos</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(c => `
+      <tr>
+        <td>${c.name}</td>
+        <td class="font-mono">${c.code}</td>
+        <td>${c.category_name}</td>
+        <td>${c.is_active ? '✅ Activo' : '🚫 Inactivo'}</td>
+      </tr>`).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4" style="color:#dc2626;padding:16px;">${err.error || 'Error'}</td></tr>`;
+  }
+}
+</script>
+</body>
+</html>

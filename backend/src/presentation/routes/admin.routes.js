@@ -49,7 +49,7 @@ router.patch('/users/:id',
   body('name').optional().notEmpty(),
   body('email').optional().isEmail(),
   body('role').optional().isIn(['superadmin','validator','administrativo','buyer','operative']),
-  body('active').optional().isBoolean(),
+  body('is_active').optional().isBoolean(),
   validate,
   async (req, res) => {
     try {
@@ -103,7 +103,7 @@ router.post('/projects',
   async (req, res) => {
     try {
       const { rows } = await pool.query(
-        `INSERT INTO projects (name, code, client, active) VALUES ($1,$2,$3,true) RETURNING *`,
+        `INSERT INTO projects (name, code, client, is_active) VALUES ($1,$2,$3,true) RETURNING *`,
         [req.body.name, req.body.code.toUpperCase(), req.body.client]
       );
       res.status(201).json({ data: rows[0] });
@@ -116,7 +116,7 @@ router.post('/projects',
 
 router.patch('/projects/:id', async (req, res) => {
   try {
-    const allowed = ['name','client','active'];
+    const allowed = ['name','client','is_active'];
     const sets = []; const vals = [];
     for (const [k, v] of Object.entries(req.body)) {
       if (allowed.includes(k)) { vals.push(v); sets.push(`${k}=$${vals.length}`); }
@@ -134,7 +134,7 @@ router.patch('/projects/:id', async (req, res) => {
 
 router.get('/categories', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM categories WHERE active=true ORDER BY name');
+    const { rows } = await pool.query('SELECT * FROM categories WHERE is_active=true ORDER BY name');
     res.json({ data: rows });
   } catch (err) { res.status(500).json({ error: 'Error interno' }); }
 });
@@ -142,7 +142,7 @@ router.get('/categories', async (req, res) => {
 router.get('/concepts', async (req, res) => {
   try {
     const { category_id } = req.query;
-    let q = `SELECT c.*, cat.name AS category_name FROM concepts c JOIN categories cat ON cat.id=c.category_id WHERE c.active=true`;
+    let q = `SELECT c.*, cat.name AS category_name FROM concepts c JOIN categories cat ON cat.id=c.category_id WHERE c.is_active=true`;
     const params = [];
     if (category_id) { params.push(category_id); q += ` AND c.category_id=$1`; }
     q += ' ORDER BY cat.name, c.name';
@@ -175,7 +175,7 @@ router.post('/routing-rules',
     try {
       const { validator_id, project_id, category_id, amount_min, amount_max, priority } = req.body;
       const { rows } = await pool.query(
-        `INSERT INTO routing_rules (validator_id,project_id,category_id,amount_min,amount_max,priority,active)
+        `INSERT INTO routing_rules (validator_id,project_id,category_id,min_amount,max_amount,priority,is_active)
          VALUES ($1,$2,$3,$4,$5,$6,true) RETURNING *`,
         [validator_id, project_id || null, category_id || null, amount_min || null, amount_max || null, priority]
       );

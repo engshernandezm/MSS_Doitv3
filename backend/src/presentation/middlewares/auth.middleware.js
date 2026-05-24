@@ -13,7 +13,7 @@ async function authMiddleware(req, res, next) {
   try {
     const payload = jwt.verify(finalToken, process.env.JWT_SECRET);
     const { rows } = await pool.query(
-      'SELECT id, name, email, role, phone, notification_channel FROM users WHERE id=$1 AND active=true',
+      'SELECT id, name, email, role, phone_whatsapp AS phone, notification_channel FROM users WHERE id=$1 AND is_active=true',
       [payload.sub]
     );
     if (!rows.length) return res.status(401).json({ error: 'Usuario inactivo o no encontrado' });

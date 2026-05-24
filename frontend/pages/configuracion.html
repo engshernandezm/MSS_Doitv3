@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuración — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Configuración</h2>
+    </header>
+    <main class="page-body">
+
+      <!-- Reglas de enrutamiento -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title">Reglas de Enrutamiento</span>
+          <button class="btn btn-primary btn-sm" onclick="openRuleModal()">➕ Nueva Regla</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Proyecto</th><th>Categoría</th><th>Monto mín.</th><th>Monto máx.</th>
+              <th>Validador</th><th>Prioridad</th>
+            </tr></thead>
+            <tbody id="rules-body">
+              <tr><td colspan="6" style="text-align:center;padding:24px;color:#6b7280;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Límites de gasto -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title">Límites de Gasto</span>
+          <button class="btn btn-primary btn-sm" onclick="openLimitModal()">➕ Nuevo Límite</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Concepto</th><th>Rol</th><th>Proyecto</th><th>Monto máx.</th><th>Acción</th>
+            </tr></thead>
+            <tbody id="limits-body">
+              <tr><td colspan="5" style="text-align:center;padding:24px;color:#6b7280;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Períodos contables -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Períodos Contables</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Año</th><th>Mes</th><th>Estado</th></tr></thead>
+            <tbody id="periods-body">
+              <tr><td colspan="3" style="text-align:center;padding:24px;color:#6b7280;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Modal Regla -->
+<div class="modal-overlay" id="modal-rule">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Nueva Regla de Enrutamiento</h3>
+      <button class="modal-close" onclick="closeModal('modal-rule')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Validador *</label>
+          <select id="rule-validator" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label>Prioridad *</label>
+          <input type="number" id="rule-priority" class="form-control" value="10" min="1">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Proyecto (opcional)</label>
+          <select id="rule-project" class="form-control"><option value="">Cualquier proyecto</option></select>
+        </div>
+        <div class="form-group">
+          <label>Categoría (opcional)</label>
+          <select id="rule-category" class="form-control"><option value="">Cualquier categoría</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Monto mínimo</label>
+          <input type="number" id="rule-min" class="form-control" placeholder="Sin límite">
+        </div>
+        <div class="form-group">
+          <label>Monto máximo</label>
+          <input type="number" id="rule-max" class="form-control" placeholder="Sin límite">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-rule')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-save-rule">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Límite -->
+<div class="modal-overlay" id="modal-limit">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Nuevo Límite de Gasto</h3>
+      <button class="modal-close" onclick="closeModal('modal-limit')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Concepto *</label>
+          <select id="lim-concept" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label>Rol</label>
+          <select id="lim-role" class="form-control">
+            <option value="">Todos los roles</option>
+            <option value="operative">Operativo</option>
+            <option value="buyer">Comprador</option>
+            <option value="validator">Validador</option>
+            <option value="administrativo">Administrativo</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Monto máximo *</label>
+          <input type="number" id="lim-amount" class="form-control" min="0.01" step="0.01">
+        </div>
+        <div class="form-group">
+          <label>Acción al exceder *</label>
+          <select id="lim-action" class="form-control">
+            <option value="block">Bloquear</option>
+            <option value="escalate">Escalar</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Proyecto (opcional)</label>
+        <select id="lim-project" class="form-control"><option value="">Global</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-limit')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-save-limit">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+let validators = [], projects = [], categories = [], concepts = [];
+
+(async () => {
+  const user = UI.guard(['superadmin']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  try {
+    const [usersRes, projRes, catRes, conceptsRes] = await Promise.all([
+      API.admin.users(), API.admin.projects(), API.admin.categories(), API.admin.concepts(),
+    ]);
+    validators = (usersRes.data || []).filter(u => u.role === 'validator' || u.role === 'superadmin');
+    projects   = projRes.data || [];
+    categories = catRes.data || [];
+    concepts   = conceptsRes.data || [];
+
+    // Poblar selects de los modales
+    UI.populateSelect(document.getElementById('rule-validator'), validators, 'id', 'name', 'Validador');
+    projects.forEach(p => {
+      document.getElementById('rule-project').innerHTML  += `<option value="${p.id}">${p.name}</option>`;
+      document.getElementById('lim-project').innerHTML   += `<option value="${p.id}">${p.name}</option>`;
+    });
+    categories.forEach(c => {
+      document.getElementById('rule-category').innerHTML += `<option value="${c.id}">${c.name}</option>`;
+    });
+    UI.populateSelect(document.getElementById('lim-concept'), concepts, 'id', 'name', 'Concepto');
+
+  } catch {}
+
+  await Promise.all([loadRules(), loadLimits(), loadPeriods()]);
+})();
+
+async function loadRules() {
+  const tbody = document.getElementById('rules-body');
+  try {
+    const { data } = await API.admin.routingRules();
+    if (!data.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:16px;color:#6b7280;">Sin reglas</td></tr>'; return; }
+    tbody.innerHTML = data.map(r => `
+      <tr>
+        <td>${r.project_name || 'Cualquier proyecto'}</td>
+        <td>${r.category_name || 'Cualquier categoría'}</td>
+        <td>${r.min_amount ? UI.money(r.min_amount) : '—'}</td>
+        <td>${r.max_amount ? UI.money(r.max_amount) : '—'}</td>
+        <td>${r.validator_name}</td>
+        <td>${r.priority}</td>
+      </tr>`).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" style="color:#dc2626;padding:16px;">${err.error || 'Error'}</td></tr>`;
+  }
+}
+
+async function loadLimits() {
+  const tbody = document.getElementById('limits-body');
+  try {
+    const { data } = await API.admin.spendingLimits();
+    if (!data.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:16px;color:#6b7280;">Sin límites</td></tr>'; return; }
+    tbody.innerHTML = data.map(l => `
+      <tr>
+        <td>${l.concept_name}</td>
+        <td>${l.role || 'Todos'}</td>
+        <td>${l.project_name || 'Global'}</td>
+        <td>${UI.money(l.max_amount)}</td>
+        <td><span class="badge-status badge-${l.action_on_exceed === 'block' ? 'RECHAZADO' : 'EN_REVISION'}">${l.action_on_exceed}</span></td>
+      </tr>`).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color:#dc2626;padding:16px;">${err.error || 'Error'}</td></tr>`;
+  }
+}
+
+async function loadPeriods() {
+  const tbody = document.getElementById('periods-body');
+  try {
+    const { data } = await API.admin.periods();
+    const months = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    tbody.innerHTML = data.map(p => `
+      <tr>
+        <td>${p.year}</td>
+        <td>${months[p.month]}</td>
+        <td>${p.is_closed ? '🔒 Cerrado' : '✅ Abierto'}</td>
+      </tr>`).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="3" style="color:#dc2626;padding:16px;">${err.error || 'Error'}</td></tr>`;
+  }
+}
+
+function openRuleModal() { document.getElementById('modal-rule').classList.add('open'); }
+function openLimitModal() { document.getElementById('modal-limit').classList.add('open'); }
+function closeModal(id)   { document.getElementById(id).classList.remove('open'); }
+
+document.getElementById('btn-save-rule').onclick = async () => {
+  const btn = document.getElementById('btn-save-rule');
+  UI.loading(btn, true);
+  try {
+    await API.admin.createRule({
+      validator_id: document.getElementById('rule-validator').value,
+      priority:     parseInt(document.getElementById('rule-priority').value),
+      project_id:   document.getElementById('rule-project').value   || null,
+      category_id:  document.getElementById('rule-category').value  || null,
+      amount_min:   parseFloat(document.getElementById('rule-min').value)  || null,
+      amount_max:   parseFloat(document.getElementById('rule-max').value)  || null,
+    });
+    UI.toast('Regla creada', 'success');
+    closeModal('modal-rule');
+    await loadRules();
+  } catch (err) { UI.toast(err.error || 'Error', 'error'); }
+  finally { UI.loading(btn, false); }
+};
+
+document.getElementById('btn-save-limit').onclick = async () => {
+  const btn = document.getElementById('btn-save-limit');
+  UI.loading(btn, true);
+  try {
+    await API.admin.saveLimit({
+      concept_id:       document.getElementById('lim-concept').value,
+      role:             document.getElementById('lim-role').value     || null,
+      project_id:       document.getElementById('lim-project').value  || null,
+      max_amount:       parseFloat(document.getElementById('lim-amount').value),
+      action_on_exceed: document.getElementById('lim-action').value,
+    });
+    UI.toast('Límite guardado', 'success');
+    closeModal('modal-limit');
+    await loadLimits();
+  } catch (err) { UI.toast(err.error || 'Error', 'error'); }
+  finally { UI.loading(btn, false); }
+};
+</script>
+</body>
+</html>

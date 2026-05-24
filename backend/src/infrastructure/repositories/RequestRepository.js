@@ -28,7 +28,7 @@ class RequestRepository {
   async findById(id) {
     const { rows } = await pool.query(
       `SELECT r.*,
-         u.name  AS requester_name, u.email AS requester_email, u.phone AS requester_phone,
+         u.name  AS requester_name, u.email AS requester_email, u.phone_whatsapp AS requester_phone,
          p.name  AS project_name,   p.code  AS project_code,
          c.name  AS concept_name,
          cat.name AS category_name,
@@ -108,7 +108,7 @@ class RequestRepository {
 
   async getValidationLog(requestId) {
     const { rows } = await pool.query(
-      'SELECT * FROM validation_log WHERE request_id=$1 ORDER BY created_at', [requestId]
+      'SELECT * FROM validation_log WHERE request_id=$1 ORDER BY checked_at', [requestId]
     );
     return rows;
   }
@@ -136,9 +136,9 @@ class RequestRepository {
       `SELECT * FROM routing_rules
        WHERE (project_id IS NULL OR project_id=$1)
          AND (category_id IS NULL OR category_id=$2)
-         AND (amount_min IS NULL OR $3 >= amount_min)
-         AND (amount_max IS NULL OR $3 <= amount_max)
-         AND active=true
+         AND (min_amount IS NULL OR $3 >= min_amount)
+         AND (max_amount IS NULL OR $3 <= max_amount)
+         AND is_active=true
        ORDER BY priority ASC LIMIT 1`,
       [project_id, category_id, amount]
     );

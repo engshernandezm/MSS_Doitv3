@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compras — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Compras Pendientes</h2>
+    </header>
+    <main class="page-body">
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Folio</th><th>Solicitante</th><th>Proyecto</th>
+              <th>Concepto</th><th>Monto MXN</th><th>Alertas</th><th>Fecha</th><th></th>
+            </tr></thead>
+            <tbody id="compras-body">
+              <tr><td colspan="8" style="text-align:center;padding:24px;color:#6b7280;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Modal ejecutar compra -->
+<div class="modal-overlay" id="modal-pay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Ejecutar Compra</h3>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="pay-id">
+      <div class="form-group">
+        <label>Método de pago *</label>
+        <select id="pay-method" class="form-control">
+          <option value="transferencia">Transferencia</option>
+          <option value="tarjeta">Tarjeta</option>
+          <option value="efectivo">Efectivo</option>
+          <option value="cheque">Cheque</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Referencia / No. de operación</label>
+        <input type="text" id="pay-ref" class="form-control" placeholder="Opcional">
+      </div>
+      <div class="form-group">
+        <label>Notas</label>
+        <input type="text" id="pay-notes" class="form-control" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-execute">Confirmar Compra</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+(async () => {
+  const user = UI.guard(['buyer', 'superadmin']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+  await load();
+})();
+
+async function load() {
+  const tbody = document.getElementById('compras-body');
+  try {
+    const { data } = await API.payments.pending();
+    const requisiciones = data.filter(r => r.type === 'REQUISICION');
+    if (!requisiciones.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:#6b7280;">Sin compras pendientes</td></tr>';
+      return;
+    }
+    tbody.innerHTML = requisiciones.map(r => `
+      <tr>
+        <td class="font-mono">${r.folio || '—'}</td>
+        <td>${r.requester_name}</td>
+        <td>${r.project_name}</td>
+        <td>${r.concept_name}</td>
+        <td>${UI.money(r.amount_mxn)}</td>
+        <td>${UI.alertFlags(r)}</td>
+        <td class="text-muted text-sm">${UI.fmt(r.created_at)}</td>
+        <td>
+          <a href="solicitud-detalle.html?id=${r.id}" class="btn btn-outline btn-xs">Ver</a>
+          <button class="btn btn-primary btn-xs" onclick="openPay('${r.id}')">Comprar</button>
+        </td>
+      </tr>`).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" style="color:#dc2626;padding:16px;">${err.error || 'Error'}</td></tr>`;
+  }
+}
+
+function openPay(id) {
+  document.getElementById('pay-id').value = id;
+  document.getElementById('pay-ref').value = '';
+  document.getElementById('pay-notes').value = '';
+  document.getElementById('modal-pay').classList.add('open');
+}
+function closeModal() { document.getElementById('modal-pay').classList.remove('open'); }
+
+document.getElementById('btn-execute').onclick = async () => {
+  const btn = document.getElementById('btn-execute');
+  const id  = document.getElementById('pay-id').value;
+  UI.loading(btn, true);
+  try {
+    await API.payments.execute(id, {
+      payment_method:    document.getElementById('pay-method').value,
+      payment_reference: document.getElementById('pay-ref').value,
+      payment_notes:     document.getElementById('pay-notes').value,
+    });
+    UI.toast('Compra ejecutada', 'success');
+    closeModal();
+    await load();
+  } catch (err) { UI.toast(err.error || 'Error', 'error'); }
+  finally { UI.loading(btn, false); }
+};
+</script>
+</body>
+</html>

@@ -94,6 +94,7 @@ const API = (() => {
       projects:        () => request('GET', '/api/admin/projects'),
       createProject:   (body) => request('POST', '/api/admin/projects', body),
       updateProject:   (id, body) => request('PATCH', `/api/admin/projects/${id}`, body),
+      deleteProject:   (id) => request('DELETE', `/api/admin/projects/${id}`),
 
       categories:      () => request('GET', '/api/admin/categories'),
       concepts:        (cat) => request('GET', `/api/admin/concepts${cat ? '?category_id=' + cat : ''}`),
@@ -103,6 +104,12 @@ const API = (() => {
       savePeriod:      (body) => request('POST', '/api/admin/periods', body),
       spendingLimits:  () => request('GET', '/api/admin/spending-limits'),
       saveLimit:       (body) => request('POST', '/api/admin/spending-limits', body),
+    },
+
+    catalog: {
+      projects:   () => request('GET', '/api/catalog/projects'),
+      categories: () => request('GET', '/api/catalog/categories'),
+      concepts:   (category_id) => request('GET', `/api/catalog/concepts${category_id ? '?category_id=' + category_id : ''}`),
     },
 
     // helpers

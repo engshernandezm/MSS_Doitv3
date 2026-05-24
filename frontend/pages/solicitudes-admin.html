@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solicitudes — FonzControl</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script>window.API_URL = 'http://localhost:3000';</script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <h2>Todas las Solicitudes</h2>
+    </header>
+    <main class="page-body">
+
+      <!-- Filtros -->
+      <div class="card mb-4">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;padding:4px 0;">
+          <div class="form-group" style="margin:0;min-width:140px;">
+            <label>Estado</label>
+            <select id="f-status" class="form-control">
+              <option value="">Todos</option>
+              <option value="BORRADOR">Borrador</option>
+              <option value="PENDIENTE">Pendiente</option>
+              <option value="EN_REVISION">En revisión</option>
+              <option value="APROBADO">Aprobado</option>
+              <option value="RECHAZADO">Rechazado</option>
+              <option value="PAGADO">Pagado</option>
+              <option value="COMPRADO_PENDIENTE_FACTURA">Pte. Factura</option>
+              <option value="CERRADO">Cerrado</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0;min-width:140px;">
+            <label>Tipo</label>
+            <select id="f-type" class="form-control">
+              <option value="">Todos</option>
+              <option value="REEMBOLSO">Reembolso</option>
+              <option value="REQUISICION">Requisición</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0;min-width:160px;">
+            <label>Proyecto</label>
+            <select id="f-project" class="form-control"><option value="">Todos</option></select>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="loadRequests()">Buscar</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Folio</th><th>Tipo</th><th>Solicitante</th><th>Proyecto</th>
+              <th>Concepto</th><th>Monto MXN</th><th>Estado</th><th>Alertas</th><th>Fecha</th><th></th>
+            </tr></thead>
+            <tbody id="req-body">
+              <tr><td colspan="10" style="text-align:center;padding:24px;color:#6b7280;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script>
+(async () => {
+  const user = UI.guard(['superadmin']);
+  if (!user) return;
+  document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
+
+  try {
+    const { data: projects } = await API.admin.projects();
+    const sel = document.getElementById('f-project');
+    projects.forEach(p => sel.innerHTML += `<option value="${p.id}">${p.name}</option>`);
+  } catch {}
+
+  await loadRequests();
+})();
+
+async function loadRequests() {
+  const status     = document.getElementById('f-status').value;
+  const type       = document.getElementById('f-type').value;
+  const project_id = document.getElementById('f-project').value;
+  const tbody = document.getElementById('req-body');
+  tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:24px;color:#6b7280;">Cargando...</td></tr>';
+  try {
+    const params = { limit: 100 };
+    if (status)     params.status     = status;
+    if (type)       params.type       = type;
+    if (project_id) params.project_id = project_id;
+    const { data } = await API.requests.list(params);
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:24px;color:#6b7280;">Sin resultados</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(r => `
+      <tr>
+        <td class="font-mono">${r.folio || '—'}</td>
+        <td><span class="badge-status badge-${r.type}">${r.type}</span></td>
+        <td>${r.requester_name}</td>
+        <td>${r.project_name}</td>
+        <td>${r.concept_name}</td>
+        <td>${UI.money(r.amount_mxn)}</td>
+        <td>${UI.statusBadge(r.status)}</td>
+        <td>${UI.alertFlags(r)}</td>
+        <td class="text-muted text-sm">${UI.fmt(r.created_at)}</td>
+        <td><a href="solicitud-detalle.html?id=${r.id}" class="btn btn-outline btn-xs">Ver</a></td>
+      </tr>`).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="10" style="color:#dc2626;padding:16px;">${err.error || 'Error cargando solicitudes'}</td></tr>`;
+  }
+}
+</script>
+</body>
+</html>

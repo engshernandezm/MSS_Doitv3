@@ -60,7 +60,7 @@ class ValidationEngine {
     // PASO 4: Período contable abierto
     const { rows: periods } = await pool.query(
       `SELECT * FROM accounting_periods
-       WHERE year=$1 AND month=$2 AND project_id IS NULL AND status='ABIERTO'`,
+       WHERE year=$1 AND month=$2 AND is_closed=false`,
       [request.period_year, request.period_month]
     );
     if (!periods.length) {
