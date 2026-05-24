@@ -78,7 +78,10 @@
       "Bash(node -e \"const pool = require\\('./src/infrastructure/database/postgres'\\); pool.query\\('SELECT column_name FROM information_schema.columns WHERE table_name=\\\\$1 ORDER BY ordinal_position', ['approval_history']\\).then\\(r => { console.log\\(r.rows.map\\(c=>c.column_name\\).join\\(', '\\)\\); pool.end\\(\\); }\\);\")",
       "Bash(node -e ' *)",
       "Bash(node -e \"const pool = require\\('./src/infrastructure/database/postgres'\\); pool.query\\('SELECT column_name FROM information_schema.columns WHERE table_name=\\\\$1 ORDER BY ordinal_position', ['validation_log']\\).then\\(r => { console.log\\(r.rows.map\\(c=>c.column_name\\).join\\(', '\\)\\); pool.end\\(\\); }\\);\")",
-      "Bash(curl -s http://localhost:5500/index.html)"
+      "Bash(curl -s http://localhost:5500/index.html)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5500/index.html)",
+      "PowerShell(Start-Process \"http://localhost:5500/index.html\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"superadmin@fonz.mx\",\"password\":\"Fonz2024!\"}')"
     ]
   }
 }
