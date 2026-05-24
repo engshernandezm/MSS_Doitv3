@@ -21,9 +21,9 @@
       <div class="card">
         <form id="request-form" enctype="multipart/form-data">
 
-          <!-- Sin factura toggle -->
+          <!-- Banner sin factura -->
           <div class="alert alert-warning" id="sf-banner" style="display:none;">
-            <strong>⚠️ Sin Factura:</strong> Este gasto no cuenta con comprobante fiscal. Se requiere justificación detallada.
+            <strong>⚠️ Gasto sin comprobante fiscal:</strong> Este gasto no cuenta con factura (CFDI). Se requiere una justificación detallada de al menos 20 caracteres.
           </div>
 
           <div class="form-row">
@@ -35,10 +35,10 @@
               </select>
             </div>
             <div class="form-group">
-              <label>¿Sin factura?</label>
+              <label>¿Cuentas con factura (CFDI)?</label>
               <select id="sin_factura" name="sin_factura" class="form-control">
-                <option value="false">No — tengo comprobante fiscal</option>
-                <option value="true">Sí — sin comprobante fiscal</option>
+                <option value="false">✅ Sí, tengo factura o comprobante fiscal</option>
+                <option value="true">❌ No, es un gasto sin comprobante</option>
               </select>
             </div>
           </div>
@@ -82,15 +82,21 @@
 
           <!-- Zona de upload -->
           <div class="form-group" id="upload-group">
-            <label>Comprobante (foto o PDF)</label>
+            <label>Comprobante fiscal</label>
             <div class="upload-zone" id="upload-zone">
               <input type="file" id="comprobante" name="comprobante"
-                     accept=".jpg,.jpeg,.png,.pdf,.heic,.webp">
+                     accept=".jpg,.jpeg,.png,.pdf,.heic,.webp,.xml">
               <div class="icon">📎</div>
               <div>Arrastra el archivo aquí o <strong>haz clic para seleccionar</strong></div>
-              <div class="hint">JPG, PNG, PDF, HEIC — máx 10 MB</div>
+              <div class="hint">JPG, PNG, PDF, HEIC, XML (CFDI) — máx 10 MB</div>
             </div>
-            <div id="file-preview" style="margin-top:8px;font-size:12px;color:#059669;"></div>
+            <div id="file-preview" style="margin-top:8px;font-size:13px;"></div>
+            <!-- Tarjeta de datos CFDI (solo se muestra al cargar XML) -->
+            <div id="cfdi-card" style="display:none;margin-top:10px;padding:12px 16px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;font-size:13px;line-height:1.7;">
+              <div style="font-weight:600;color:#15803d;margin-bottom:4px;">✅ CFDI detectado</div>
+              <div id="cfdi-info"></div>
+            </div>
+            <div id="cfdi-error" style="display:none;margin-top:8px;padding:10px 14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;font-size:13px;color:#dc2626;"></div>
           </div>
 
           <div class="form-group">
@@ -115,12 +121,105 @@
 <script src="../assets/js/api.js"></script>
 <script src="../assets/js/ui.js"></script>
 <script>
+// ── Parser de CFDI 4.0 ────────────────────────────────────────────────────────
+function parseCFDI(xmlText) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, 'application/xml');
+  if (doc.querySelector('parsererror')) return null;
+
+  const NS_CFDI = 'http://www.sat.gob.mx/cfd/4';
+  const NS_TFD  = 'http://www.sat.gob.mx/TimbreFiscalDigital';
+  const NS_P20  = 'http://www.sat.gob.mx/Pagos20';
+
+  const comp    = doc.getElementsByTagNameNS(NS_CFDI, 'Comprobante')[0];
+  const emisor  = doc.getElementsByTagNameNS(NS_CFDI, 'Emisor')[0];
+  const receptor= doc.getElementsByTagNameNS(NS_CFDI, 'Receptor')[0];
+  const tfd     = doc.getElementsByTagNameNS(NS_TFD,  'TimbreFiscalDigital')[0];
+  const totales = doc.getElementsByTagNameNS(NS_P20,  'Totales')[0];
+
+  if (!comp || !emisor) return null;
+
+  const tipo  = comp.getAttribute('TipoDeComprobante');
+  let   total = parseFloat(comp.getAttribute('Total') || '0');
+
+  // Moneda: para tipo P usar la del primer nodo Pago, sino la del Comprobante
+  const primerPago = doc.getElementsByTagNameNS(NS_P20, 'Pago')[0];
+  let monedaRaw = tipo === 'P'
+    ? (primerPago?.getAttribute('MonedaP') || comp.getAttribute('Moneda') || 'MXN')
+    : (comp.getAttribute('Moneda') || 'MXN');
+  // XXX = no aplica (CFDIs de pago global), tratar como MXN
+  const moneda = (monedaRaw === 'XXX' || !monedaRaw) ? 'MXN' : monedaRaw;
+
+  if (tipo === 'P' && totales) {
+    total = parseFloat(totales.getAttribute('MontoTotalPagos') || total);
+  }
+
+  const tipoLabel = { I:'Ingreso', E:'Egreso/Nota crédito', P:'Pago', T:'Traslado', N:'Nómina' };
+
+  return {
+    rfc_emisor:    emisor.getAttribute('Rfc'),
+    nombre_emisor: emisor.getAttribute('Nombre'),
+    rfc_receptor:  receptor?.getAttribute('Rfc') || null,
+    uuid:          tfd?.getAttribute('UUID') || null,
+    total,
+    moneda,
+    fecha:         comp.getAttribute('Fecha'),
+    tipo,
+    tipo_label:    tipoLabel[tipo] || tipo,
+    folio:         (comp.getAttribute('Serie') || '') + (comp.getAttribute('Folio') || ''),
+    version:       comp.getAttribute('Version'),
+  };
+}
+
+const RFC_REGEX = /^[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}$/;
+
+function showCfdiCard(cfdi) {
+  const card  = document.getElementById('cfdi-card');
+  const info  = document.getElementById('cfdi-info');
+  const errEl = document.getElementById('cfdi-error');
+  errEl.style.display = 'none';
+
+  const rfcValido = RFC_REGEX.test(cfdi.rfc_emisor || '');
+  const rfcBadge  = rfcValido
+    ? `<span style="color:#15803d;font-weight:600;">${cfdi.rfc_emisor}</span> <span style="color:#15803d;font-size:11px;">(válido)</span>`
+    : `<span style="color:#dc2626;font-weight:600;">${cfdi.rfc_emisor || 'No encontrado'}</span> <span style="color:#dc2626;font-size:11px;">(⚠️ formato inválido)</span>`;
+
+  info.innerHTML = `
+    <table style="border-collapse:collapse;width:100%;">
+      <tr><td style="color:#6b7280;width:130px;">RFC Emisor</td><td>${rfcBadge}</td></tr>
+      <tr><td style="color:#6b7280;">Emisor</td><td style="font-weight:500;">${cfdi.nombre_emisor || '—'}</td></tr>
+      ${cfdi.rfc_receptor ? `<tr><td style="color:#6b7280;">RFC Receptor</td><td>${cfdi.rfc_receptor}</td></tr>` : ''}
+      ${cfdi.uuid ? `<tr><td style="color:#6b7280;">UUID</td><td style="font-family:monospace;font-size:11px;">${cfdi.uuid}</td></tr>` : ''}
+      <tr><td style="color:#6b7280;">Tipo</td><td>${cfdi.tipo_label} (v${cfdi.version})</td></tr>
+      ${cfdi.folio ? `<tr><td style="color:#6b7280;">Serie/Folio</td><td>${cfdi.folio}</td></tr>` : ''}
+      ${cfdi.total > 0 ? `<tr><td style="color:#6b7280;">Monto</td><td style="font-weight:600;">$${cfdi.total.toLocaleString('es-MX', {minimumFractionDigits:2})} ${cfdi.moneda}</td></tr>` : ''}
+      <tr><td style="color:#6b7280;">Fecha</td><td>${cfdi.fecha ? cfdi.fecha.replace('T',' ') : '—'}</td></tr>
+    </table>`;
+  card.style.display = '';
+
+  // Auto-llenar monto y moneda desde el CFDI
+  if (cfdi.total > 0) {
+    document.getElementById('amount').value = cfdi.total.toFixed(2);
+  }
+  const currencySel = document.getElementById('currency');
+  if (cfdi.moneda === 'USD' || cfdi.moneda === 'MXN') {
+    currencySel.value = cfdi.moneda;
+    // Mostrar/ocultar campo de tipo de cambio
+    document.getElementById('exchange-group').style.display = cfdi.moneda === 'USD' ? '' : 'none';
+  }
+
+  if (!rfcValido) {
+    errEl.textContent = '⚠️ El RFC del emisor en el CFDI no tiene el formato correcto. Verifica el archivo antes de continuar.';
+    errEl.style.display = '';
+  }
+}
+
+// ── Inicialización ────────────────────────────────────────────────────────────
 (async () => {
   const user = UI.guard(['operative','administrativo','buyer','superadmin']);
   if (!user) return;
   document.getElementById('sidebar').innerHTML = UI.renderSidebar(user.role);
 
-  // Cargar proyectos y categorías en paralelo
   try {
     const [projRes, catRes] = await Promise.all([
       API.catalog.projects(),
@@ -129,7 +228,6 @@
     UI.populateSelect(document.getElementById('project_id'), projRes.data, 'id', 'name', 'Proyecto');
     UI.populateSelect(document.getElementById('category_id'), catRes.data, 'id', 'name', 'Categoría');
 
-    // Auto-cargar conceptos de la primera categoría disponible
     const catSel = document.getElementById('category_id');
     if (catRes.data.length > 0) {
       catSel.value = catRes.data[0].id;
@@ -139,7 +237,6 @@
     UI.toast('Error cargando catálogos: ' + (err.error || err.message || 'Error'), 'error');
   }
 
-  // Recargar conceptos al cambiar categoría
   document.getElementById('category_id').addEventListener('change', async function() {
     await loadConcepts(this.value);
   });
@@ -151,18 +248,21 @@
     } catch { UI.toast('Error cargando conceptos', 'error'); }
   }
 
-  // Moneda → tipo de cambio
+  // Moneda
   document.getElementById('currency').addEventListener('change', function() {
     document.getElementById('exchange-group').style.display = this.value === 'USD' ? '' : 'none';
   });
 
-  // Sin factura
+  // ¿Tienes factura?
   document.getElementById('sin_factura').addEventListener('change', function() {
     const sf = this.value === 'true';
     document.getElementById('sf-banner').style.display = sf ? '' : 'none';
     document.getElementById('upload-group').style.display = sf ? 'none' : '';
-    const req = document.getElementById('obs-required');
-    req.textContent = sf ? '* (mínimo 20 caracteres)' : '';
+    document.getElementById('obs-required').textContent = sf ? '* (mínimo 20 caracteres)' : '';
+    if (sf) {
+      document.getElementById('cfdi-card').style.display = 'none';
+      document.getElementById('cfdi-error').style.display = 'none';
+    }
   });
 
   // Contador observaciones
@@ -171,39 +271,63 @@
   });
 
   // Upload zone
-  const zone = document.getElementById('upload-zone');
+  const zone      = document.getElementById('upload-zone');
   const fileInput = document.getElementById('comprobante');
+
   zone.addEventListener('click', () => fileInput.click());
   zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
   zone.addEventListener('drop', e => {
     e.preventDefault(); zone.classList.remove('drag');
-    if (e.dataTransfer.files[0]) { fileInput.files = e.dataTransfer.files; updatePreview(); }
+    if (e.dataTransfer.files[0]) { fileInput.files = e.dataTransfer.files; handleFile(); }
   });
-  fileInput.addEventListener('change', updatePreview);
-  function updatePreview() {
-    const f = fileInput.files[0];
-    document.getElementById('file-preview').textContent = f ? `✅ ${f.name} (${(f.size/1024/1024).toFixed(2)} MB)` : '';
+  fileInput.addEventListener('change', handleFile);
+
+  function handleFile() {
+    const f       = fileInput.files[0];
+    const preview = document.getElementById('file-preview');
+    const cfdiCard= document.getElementById('cfdi-card');
+    const cfdiErr = document.getElementById('cfdi-error');
+
+    cfdiCard.style.display = 'none';
+    cfdiErr.style.display  = 'none';
+
+    if (!f) { preview.textContent = ''; return; }
+
+    preview.innerHTML = `<span style="color:#059669;">✅ ${f.name} (${(f.size/1024/1024).toFixed(2)} MB)</span>`;
+
+    if (f.name.toLowerCase().endsWith('.xml')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const cfdi = parseCFDI(e.target.result);
+        if (!cfdi) {
+          cfdiErr.textContent = '❌ El archivo XML no parece ser un CFDI válido. Verifica que sea una factura electrónica del SAT.';
+          cfdiErr.style.display = '';
+          return;
+        }
+        showCfdiCard(cfdi);
+      };
+      reader.readAsText(f, 'UTF-8');
+    }
   }
 
   // Submit
   document.getElementById('request-form').addEventListener('submit', async e => {
     e.preventDefault();
-    const btn = document.getElementById('btn-submit');
+    const btn   = document.getElementById('btn-submit');
     const alert = document.getElementById('result-alert');
     alert.className = 'hidden';
 
-    const sf = document.getElementById('sin_factura').value === 'true';
+    const sf  = document.getElementById('sin_factura').value === 'true';
     const obs = document.getElementById('observations').value.trim();
 
     if (sf && obs.length < 20) {
       alert.className = 'alert alert-danger';
-      alert.textContent = 'Sin factura requiere justificación de al menos 20 caracteres.';
+      alert.textContent = 'El gasto sin factura requiere una justificación de al menos 20 caracteres.';
       return;
     }
 
     UI.loading(btn, true);
-
     try {
       const fd = new FormData(e.target);
       const { data, warning } = await API.requests.create(fd);
