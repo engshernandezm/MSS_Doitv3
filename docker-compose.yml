@@ -45,18 +45,16 @@ services:
       - uploads:/app/uploads
       - ./database:/app/database:ro   # para seed_users.js
 
-  # ── Frontend (servidor de archivos estáticos) ─────────────────────────────────
+  # ── Frontend (nginx, archivos estáticos) ──────────────────────────────────────
   frontend:
-    image: node:20-alpine
+    image: nginx:alpine
     container_name: fonzcontrol-web
     restart: unless-stopped
-    working_dir: /app
-    command: node serve-frontend.js
     ports:
       - "5500:5500"
     volumes:
-      - ./frontend:/app/frontend:ro
-      - ./serve-frontend.js:/app/serve-frontend.js:ro
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   pgdata:
