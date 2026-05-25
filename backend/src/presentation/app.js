@@ -17,8 +17,11 @@ const cronJobs        = require('../application/CronJobs');
 const app = express();
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
+const corsOrigin = process.env.CORS_ORIGIN || '*';
 app.use(cors({
-  origin:      process.env.CORS_ORIGIN || '*',
+  origin: corsOrigin === '*'
+    ? (origin, cb) => cb(null, origin || '*')
+    : corsOrigin,
   credentials: true,
 }));
 
