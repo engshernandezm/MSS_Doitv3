@@ -17,13 +17,8 @@ const cronJobs        = require('../application/CronJobs');
 const app = express();
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
-const corsOrigin = process.env.CORS_ORIGIN || '*';
-app.use(cors({
-  origin: corsOrigin === '*'
-    ? (origin, cb) => cb(null, origin || '*')
-    : corsOrigin,
-  credentials: true,
-}));
+app.use(cors({ origin: '*' }));
+app.options('*', cors({ origin: '*' })); // preflight explícito antes del rate limiter
 
 // ─── RATE LIMITING ───────────────────────────────────────────────────────────
 app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: 'Demasiados intentos' }));
