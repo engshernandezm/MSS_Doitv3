@@ -66,11 +66,8 @@ router.post('/:id/execute',
         payment_reference: req.body.payment_reference,
         payment_notes:     req.body.payment_notes,
         executed_by:       req.user.id,
+        next_status:       nextStatus,
       });
-
-      if (nextStatus !== 'PAGADO') {
-        await requestRepo.updateStatus(req.params.id, nextStatus);
-      }
 
       await requestRepo.addApprovalHistory(
         req.params.id, req.user.id, 'PAGAR',
@@ -157,14 +154,12 @@ router.post('/provider-reminder',
   requireRole('buyer','administrativo','superadmin'),
   body('request_id').isUUID(),
   body('provider_email').isEmail(),
-  body('provider_name').notEmpty(),
   validate,
   async (req, res) => {
     try {
       await notifRepo.addProviderReminder({
         request_id:     req.body.request_id,
         provider_email: req.body.provider_email,
-        provider_name:  req.body.provider_name,
       });
       res.json({ message: 'Recordatorio programado' });
     } catch (err) {

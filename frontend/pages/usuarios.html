@@ -145,7 +145,7 @@ function editUser(id) {
 
 async function toggleActive(id, current) {
   try {
-    await API.admin.updateUser(id, { active: !current });
+    await API.admin.updateUser(id, { is_active: !current });
     UI.toast(!current ? 'Usuario activado' : 'Usuario desactivado', 'success');
     await loadUsers();
   } catch (err) { UI.toast(err.error || 'Error', 'error'); }

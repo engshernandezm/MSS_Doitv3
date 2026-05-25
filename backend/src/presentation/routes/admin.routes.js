@@ -27,7 +27,7 @@ router.post('/users',
   body('email').isEmail(),
   body('password').isLength({ min: 8 }),
   body('role').isIn(['superadmin','validator','administrativo','buyer','operative']),
-  body('phone').optional().isMobilePhone(),
+  body('phone').optional().isString(),
   body('notification_channel').optional().isIn(['email','whatsapp','both']),
   validate,
   async (req, res) => {
@@ -198,17 +198,16 @@ router.get('/periods', async (req, res) => {
 router.post('/periods',
   body('year').isInt({ min: 2020 }),
   body('month').isInt({ min: 1, max: 12 }),
-  body('status').isIn(['ABIERTO','CERRADO']),
+  body('is_closed').isBoolean(),
   validate,
   async (req, res) => {
     try {
       const { rows } = await pool.query(
-        `INSERT INTO accounting_periods (year, month, status, project_id)
-         VALUES ($1,$2,$3,$4)
-         ON CONFLICT (year, month, COALESCE(project_id, '00000000-0000-0000-0000-000000000000'))
-         DO UPDATE SET status=$3
+        `INSERT INTO accounting_periods (year, month, is_closed)
+         VALUES ($1,$2,$3)
+         ON CONFLICT (year, month) DO UPDATE SET is_closed=$3
          RETURNING *`,
-        [req.body.year, req.body.month, req.body.status, req.body.project_id || null]
+        [req.body.year, req.body.month, req.body.is_closed]
       );
       res.json({ data: rows[0] });
     } catch (err) { res.status(500).json({ error: 'Error interno' }); }

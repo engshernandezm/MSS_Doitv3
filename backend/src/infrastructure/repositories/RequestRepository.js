@@ -208,13 +208,13 @@ class RequestRepository {
   }
 
   // Para pago
-  async markPaymentExecuted(id, { payment_method, payment_reference, payment_notes, executed_by }) {
+  async markPaymentExecuted(id, { payment_method, payment_reference, payment_notes, executed_by, next_status = 'PAGADO' }) {
     const { rows } = await pool.query(
       `UPDATE spending_requests
-       SET status='PAGADO', payment_method=$2, payment_reference=$3,
-           payment_notes=$4, payment_executed_by=$5, payment_date=NOW()
+       SET status=$2, payment_method=$3, payment_reference=$4,
+           payment_notes=$5, payment_executed_by=$6, payment_date=NOW()
        WHERE id=$1 RETURNING *`,
-      [id, payment_method, payment_reference, payment_notes, executed_by]
+      [id, next_status, payment_method, payment_reference, payment_notes, executed_by]
     );
     return rows[0];
   }

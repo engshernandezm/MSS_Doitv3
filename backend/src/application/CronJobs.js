@@ -16,16 +16,16 @@ function start() {
         if (!request) continue;
 
         const user = {
-          id:                   reminder.validator_id,
+          id:                   reminder.recipient_id,
           name:                 reminder.validator_name,
           email:                reminder.validator_email,
           phone:                reminder.validator_phone,
           notification_channel: reminder.notification_channel,
         };
 
-        if (reminder.reminder_type === 'RECORDATORIO') {
+        if (reminder.type === 'reminder') {
           await notifSvc.notify('RECORDATORIO_VALIDADOR', user, request);
-        } else if (reminder.reminder_type === 'ESCALACION') {
+        } else if (reminder.type === 'escalation') {
           // Reasignar solicitud al validador de escalación
           await requestRepo.updateStatus(request.id, 'EN_REVISION', {
             validator_id: reminder.validator_id,
@@ -71,8 +71,7 @@ function start() {
   cron.schedule('0 9 * * *', async () => {
     try {
       const { rowCount } = await pool.query(
-        `UPDATE whatsapp_conversations SET state='IDLE', project_id=NULL, request_type=NULL,
-           sin_factura=false, ocr_data=NULL, observations=NULL
+        `UPDATE whatsapp_conversations SET state='IDLE', context='{}'
          WHERE expires_at < NOW() AND state!='IDLE'`
       );
       if (rowCount) console.log(`[CRON] ${rowCount} conversaciones WhatsApp limpiadas`);
