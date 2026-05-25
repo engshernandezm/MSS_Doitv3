@@ -1,7 +1,13 @@
 // Cliente API centralizado para FonzControl doitv3
 
 const API = (() => {
-  const BASE = window.API_URL || (window.location.protocol + '//' + window.location.hostname + ':3000');
+  const BASE = window.API_URL || (function () {
+    var port = window.location.port;
+    var isStandardPort = !port || port === '80' || port === '443';
+    return isStandardPort
+      ? window.location.protocol + '//' + window.location.hostname
+      : window.location.protocol + '//' + window.location.hostname + ':3000';
+  }());
 
   function token() { return localStorage.getItem('fc_token'); }
   function user()  { return JSON.parse(localStorage.getItem('fc_user') || 'null'); }
