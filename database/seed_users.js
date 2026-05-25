@@ -2,7 +2,10 @@
 // Ejecutar: node database/seed_users.js
 // Requiere que el .env del backend esté configurado
 
-require('dotenv').config({ path: './backend/.env' });
+// Carga .env local si no hay variables de entorno ya inyectadas (ej. Docker)
+if (!process.env.DB_HOST) {
+  require('dotenv').config({ path: './backend/.env' });
+}
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 

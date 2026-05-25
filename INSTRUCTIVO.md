@@ -7,7 +7,8 @@ FONZ — Control de Gasto doitv3 v2
 
 ## Contenido
 
-1. [Prerrequisitos](#1-prerrequisitos)
+0. [Inicio rápido con Docker ⬅️ recomendado](#0-inicio-rápido-con-docker)
+1. [Prerrequisitos (instalación manual)](#1-prerrequisitos)
 2. [Instalación paso a paso](#2-instalación-paso-a-paso)
 3. [Cómo iniciar el sistema](#3-cómo-iniciar-el-sistema)
 4. [Primer acceso y usuarios de prueba](#4-primer-acceso-y-usuarios-de-prueba)
@@ -19,6 +20,89 @@ FONZ — Control de Gasto doitv3 v2
 10. [Solución de problemas frecuentes](#10-solución-de-problemas-frecuentes)
 11. [Comandos de mantenimiento](#11-comandos-de-mantenimiento)
 12. [Estructura del proyecto](#12-estructura-del-proyecto)
+
+---
+
+---
+
+## 0. Inicio rápido con Docker
+
+> **Recomendado.** Un solo comando levanta PostgreSQL, el backend y el frontend sin instalar nada más.
+
+### Prerrequisito único
+
+Instalar **Docker Desktop**: https://www.docker.com/products/docker-desktop
+
+Verificar que esté corriendo:
+```bash
+docker --version
+docker compose version
+```
+
+### Levantar todo el sistema
+
+```bash
+# Desde la carpeta raíz del proyecto
+docker compose up --build
+```
+
+La primera vez:
+- Descarga las imágenes de Node.js 20 y PostgreSQL 16
+- Crea la base de datos `doitv3`
+- Aplica los 6 esquemas SQL automáticamente
+- Crea los 10 usuarios de prueba con contraseña `Fonz2024!`
+- Levanta el backend en el puerto 3000
+- Levanta el frontend en el puerto 5500
+
+Espera hasta ver en consola:
+```
+fonzcontrol-api  | [DOCKER] Usuarios creados exitosamente.
+fonzcontrol-api  | [APP] FonzControl doitv3 corriendo en puerto 3000
+fonzcontrol-web  | [FRONTEND] Servidor en http://localhost:5500
+```
+
+Abrir en el navegador: **http://localhost:5500**
+
+### Comandos útiles Docker
+
+```bash
+# Levantar en segundo plano
+docker compose up -d --build
+
+# Ver logs en tiempo real
+docker compose logs -f
+
+# Ver logs solo del backend
+docker compose logs -f backend
+
+# Detener todo
+docker compose down
+
+# Detener y borrar la base de datos (reset total)
+docker compose down -v
+
+# Reconstruir solo el backend tras cambios de código
+docker compose up -d --build backend
+```
+
+### Credenciales de prueba
+
+**Contraseña para todos los usuarios: `Fonz2024!`**
+
+| Email | Rol |
+|-------|-----|
+| `superadmin@fonz.mx` | Superadmin |
+| `director.ops@fonz.mx` | Validador |
+| `anna@fonz.mx` | Administrativo |
+| `irving@fonz.mx` | Buyer |
+| `juan.garcia@fonz.mx` | Operativo |
+
+### Notas Docker
+
+- Los datos de la BD persisten en un volumen Docker llamado `pgdata`. Al hacer `docker compose down` los datos se conservan. Solo se pierden con `docker compose down -v`.
+- Los archivos subidos (comprobantes) persisten en el volumen `uploads`.
+- Si modificas código del backend, reconstruye con `docker compose up -d --build backend`.
+- El frontend es estático — cambios en HTML/CSS/JS se reflejan inmediatamente sin reconstruir.
 
 ---
 
@@ -646,15 +730,23 @@ doitv3/
 
 ---
 
-## Resumen rápido de inicio (checklist)
+## Resumen rápido de inicio
 
+### Con Docker (recomendado)
+```bash
+docker compose up --build
+# Abrir http://localhost:5500
+# Login: superadmin@fonz.mx / Fonz2024!
+```
+
+### Sin Docker (manual)
 - [ ] PostgreSQL corriendo
 - [ ] Base de datos `doitv3` creada
-- [ ] 4 archivos SQL aplicados en orden
+- [ ] 5 archivos SQL aplicados en orden (001 al 005)
 - [ ] `seed_catalog.sql` cargado
 - [ ] `node database/seed_users.js` ejecutado
 - [ ] `backend/.env` configurado con datos de DB correctos
 - [ ] `npm install` en carpeta `backend`
 - [ ] Backend corriendo: `node src/presentation/app.js`
-- [ ] Frontend abierto en navegador
+- [ ] Frontend: `node serve-frontend.js`
 - [ ] Login con `superadmin@fonz.mx` / `Fonz2024!`

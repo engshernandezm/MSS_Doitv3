@@ -4,6 +4,7 @@ node_modules/
 # Environment variables (contain secrets)
 .env
 backend/.env
+# .env.docker se puede commitear (no tiene secretos reales)
 
 # Uploads (generated content, not source code)
 backend/uploads/

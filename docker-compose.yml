@@ -1,0 +1,63 @@
+version: '3.9'
+
+services:
+
+  # ── Base de datos ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: fonzcontrol-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       doitv3
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: Admin1234
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Esquemas y seed se ejecutan automáticamente en el primer arranque
+      - ./database/001_base_schema.sql:/docker-entrypoint-initdb.d/01_base_schema.sql:ro
+      - ./database/002_requests_schema.sql:/docker-entrypoint-initdb.d/02_requests_schema.sql:ro
+      - ./database/003_analytics_schema.sql:/docker-entrypoint-initdb.d/03_analytics_schema.sql:ro
+      - ./database/004_notifications_schema.sql:/docker-entrypoint-initdb.d/04_notifications_schema.sql:ro
+      - ./database/005_code_alignment.sql:/docker-entrypoint-initdb.d/05_code_alignment.sql:ro
+      - ./database/seed_catalog.sql:/docker-entrypoint-initdb.d/06_seed_catalog.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d doitv3"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  # ── Backend (API REST) ────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fonzcontrol-api
+    restart: unless-stopped
+    env_file: ./backend/.env.docker
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/uploads
+      - ./database:/app/database:ro   # para seed_users.js
+
+  # ── Frontend (servidor de archivos estáticos) ─────────────────────────────────
+  frontend:
+    image: node:20-alpine
+    container_name: fonzcontrol-web
+    restart: unless-stopped
+    working_dir: /app
+    command: node serve-frontend.js
+    ports:
+      - "5500:5500"
+    volumes:
+      - ./frontend:/app/frontend:ro
+      - ./serve-frontend.js:/app/serve-frontend.js:ro
+
+volumes:
+  pgdata:
+  uploads:
